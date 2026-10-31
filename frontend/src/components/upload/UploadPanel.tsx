@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Upload, X, ImageIcon } from 'lucide-react';
+import { Upload, X, ImageIcon, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
 const SAMPLE_SKETCHES = [
@@ -19,13 +19,15 @@ export const UploadPanel: React.FC = () => {
 
   const processFile = (file: File) => {
     setErrorMsg(null);
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setErrorMsg('Please upload PNG, JPG, or WebP.');
+    const validExtensions = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+
+    if (!validExtensions.includes(ext) && !file.type.startsWith('image/')) {
+      setErrorMsg('Please upload a high-quality image (PNG, JPG, WebP, BMP).');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMsg('Image size exceeds 10MB.');
+    if (file.size > 50 * 1024 * 1024) {
+      setErrorMsg('Image size exceeds 50MB limit.');
       return;
     }
 
@@ -75,7 +77,7 @@ export const UploadPanel: React.FC = () => {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff"
             className="hidden"
             onChange={(e) => {
               if (e.target.files?.[0]) processFile(e.target.files[0]);
@@ -85,29 +87,39 @@ export const UploadPanel: React.FC = () => {
             <Upload className="w-5 h-5" />
           </div>
           <span className="text-xs font-medium text-slate-200">
-            Click to upload, or drag and drop
+            Upload high-quality image or sketch
           </span>
-          <span className="text-[11px] text-slate-500 mt-0.5">PNG, JPG, or WebP</span>
+          <span className="text-[11px] text-slate-500 mt-0.5">
+            PNG, JPG, WebP, or BMP (up to 50MB)
+          </span>
         </div>
       ) : (
         <div className="relative border border-slate-800 rounded-xl bg-slate-950/80 p-3">
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-xs">
-            <span className="text-slate-300 font-medium truncate max-w-[200px] flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
-              {currentImageName || 'Sketch Preview'}
-            </span>
-            <button
-              onClick={() => setCurrentImage(null, null)}
-              className="text-slate-400 hover:text-rose-400 p-1 rounded-md transition-colors"
-              title="Remove"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5 truncate max-w-[220px]">
+              <ImageIcon className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+              <span className="text-slate-200 font-medium truncate">
+                {currentImageName || 'High-Quality Image'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-900/60 px-1.5 py-0.5 rounded flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                Ready
+              </span>
+              <button
+                onClick={() => setCurrentImage(null, null)}
+                className="text-slate-400 hover:text-rose-400 p-0.5 rounded transition-colors"
+                title="Remove"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-          <div className="h-44 w-full bg-slate-900/60 rounded-lg flex items-center justify-center p-2 border border-slate-800/50">
+          <div className="h-44 w-full bg-slate-900/60 rounded-lg flex items-center justify-center p-2 border border-slate-800/50 overflow-hidden">
             <img
               src={currentImageBase64}
-              alt="Sketch Preview"
+              alt="High-Quality Upload Preview"
               className="max-h-full max-w-full object-contain rounded"
             />
           </div>
@@ -123,7 +135,7 @@ export const UploadPanel: React.FC = () => {
       {/* Quick Test Samples */}
       <div className="pt-1">
         <span className="text-[11px] font-medium text-slate-400 block mb-1.5">
-          Or try a sample sketch:
+          Or test with sample image:
         </span>
         <div className="grid grid-cols-6 gap-1.5">
           {SAMPLE_SKETCHES.map((sample) => (
