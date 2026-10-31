@@ -1,30 +1,25 @@
 import React, { useState } from 'react';
-import { Upload, PenTool, Wand2, Sparkles, Download, Box, Loader2, AlertCircle } from 'lucide-react';
+import { Upload, PenTool, Sparkles, Download, Box, Loader2, AlertCircle, Sliders, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { UploadPanel } from '../components/upload/UploadPanel';
 import { DrawingCanvas } from '../components/canvas/DrawingCanvas';
-import { PromptTo3DPanel } from '../components/prompt/PromptTo3DPanel';
 import { ModelViewer3D } from '../components/viewer/ModelViewer3D';
 import { analyzeSketch, analyzePrompt } from '../services/intelligence';
 import { submitPipelineJob, getPipelineStatus, getPipelineResult } from '../services/pipeline';
 import { triggerFileDownload } from '../services/downloads';
 
 export const Workspace: React.FC = () => {
-  const [inputMode, setInputMode] = useState<'draw' | 'upload' | 'prompt'>('draw');
+  const [sketchMode, setSketchMode] = useState<'draw' | 'upload'>('draw');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [statusText, setStatusText] = useState('');
-  const [errorText, setErrorText] = useState<string | null>(null);
-
-  const [detectedResult, setDetectedResult] = useState<{
-    name: string;
-    primaryHex?: string;
-    secondaryHex?: string;
-    duration?: number;
-  } | null>(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const {
     currentImageBase64,
     textPrompt,
+    setTextPrompt,
+    preprocessFirst,
+    setPreprocessFirst,
     pbrGlbUrl,
     activeGlbUrl,
     setCurrentMeshResult,
@@ -34,63 +29,95 @@ export const Workspace: React.FC = () => {
     currentMeshResult,
   } = useAppStore();
 
+  const [generationSummary, setGenerationSummary] = useState<{
+    objectName: string;
+    primaryHex?: string;
+    secondaryHex?: string;
+    durationSeconds?: number;
+  } | null>(null);
+
   const handleGenerate = async () => {
-    setErrorText(null);
+    setErrorMessage(null);
     setIsGenerating(true);
-    setStatusText('Preparing...');
+    setStatusMessage('Preparing input...');
 
     try {
+      // Validate that at least a sketch or prompt is provided
+      const hasSketch = !!currentImageBase64;
+      const hasPrompt = !!textPrompt.trim();
+
+      if (!hasSketch && !hasPrompt) {
+        throw new Error(
+          sketchMode === 'draw'
+            ? 'Please create a sketch on the canvas first.'
+            : 'Please upload a sketch image first.'
+        );
+      }
+
       let category: string | undefined = undefined;
       let primaryRgb: number[] | undefined = undefined;
       let secondaryRgb: number[] | undefined = undefined;
       let primaryHex: string | undefined = undefined;
       let secondaryHex: string | undefined = undefined;
-      let objectLabel = '3D Object';
+      let objectLabel = '3D Asset';
 
-      // 1. Semantic & Color Analysis
-      if (inputMode === 'prompt') {
-        if (!textPrompt.trim()) {
-          throw new Error('Please enter a description for your 3D model.');
-        }
-        setStatusText('Analyzing prompt & colors with AI...');
-        const promptRes = await analyzePrompt(textPrompt);
-        category = promptRes.category;
-        primaryRgb = promptRes.primary_color_rgb;
-        secondaryRgb = promptRes.secondary_color_rgb;
-        primaryHex = promptRes.primary_color_hex;
-        secondaryHex = promptRes.secondary_color_hex;
-        objectLabel = promptRes.predicted_object || promptRes.category || 'Object';
-      } else {
-        if (!currentImageBase64) {
-          throw new Error(
-            inputMode === 'draw'
-              ? 'Please draw a sketch on the canvas first.'
-              : 'Please upload an image first.'
-          );
-        }
-        setStatusText('Analyzing sketch & colors...');
-        const intel = await analyzeSketch(currentImageBase64);
+      // 1. Analyze Sketch / Prompt for object type & colors
+      if (hasPrompt && !hasSketch) {
+        setStatusMessage('Analyzing prompt characteristics with AI...');
+        const pRes = await analyzePrompt(textPrompt);
+        category = pRes.category;
+        primaryRgb = pRes.primary_color_rgb;
+        secondaryRgb = pRes.secondary_color_rgb;
+        primaryHex = pRes.primary_color_hex;
+        secondaryHex = pRes.secondary_color_hex;
+        objectLabel = pRes.predicted_object || pRes.category || 'Object';
+      } else if (hasSketch) {
+        setStatusMessage(
+          preprocessFirst
+            ? 'Preprocessing sketch (resizing, contrast, noise reduction)...'
+            : 'Analyzing sketch visual concept...'
+        );
+        const intel = await analyzeSketch(currentImageBase64!);
         category = intel.predicted_category;
         primaryRgb = intel.primary_color_rgb;
         secondaryRgb = intel.secondary_color_rgb;
         primaryHex = intel.primary_color_hex;
         secondaryHex = intel.secondary_color_hex;
         objectLabel = intel.predicted_category || 'Object';
+
+        // If optional prompt also provided, merge prompt colors/attributes
+        if (hasPrompt) {
+          try {
+            const pRes = await analyzePrompt(textPrompt);
+            if (pRes.category) category = pRes.category;
+            if (pRes.primary_color_rgb) {
+              primaryRgb = pRes.primary_color_rgb;
+              primaryHex = pRes.primary_color_hex;
+            }
+            if (pRes.secondary_color_rgb) {
+              secondaryRgb = pRes.secondary_color_rgb;
+              secondaryHex = pRes.secondary_color_hex;
+            }
+            if (pRes.predicted_object) objectLabel = pRes.predicted_object;
+          } catch {
+            // Fallback to sketch semantics
+          }
+        }
       }
 
-      setDetectedResult({
-        name: objectLabel,
+      setGenerationSummary({
+        objectName: objectLabel,
         primaryHex,
         secondaryHex,
       });
 
-      // 2. Submit to Reconstruction Pipeline with Best Quality Settings
-      setStatusText('Generating 3D model & PBR textures...');
+      // 2. Submit pipeline reconstruction job with optimal PBR settings
+      setStatusMessage('Reconstructing 3D geometry & baking materials...');
 
       const payload: any = {
         preferred_model: 'auto',
         quality_preset: 'high',
-        preprocess_first: inputMode !== 'prompt',
+        preprocess_first: preprocessFirst,
         auto_refine: true,
         refine_preset: 'high',
         export_formats: ['glb', 'obj'],
@@ -101,18 +128,19 @@ export const Workspace: React.FC = () => {
         async_execution: true,
       };
 
-      if (inputMode === 'prompt') {
-        payload.prompt = textPrompt;
-        if (primaryRgb) payload.primary_color_rgb = primaryRgb;
-        if (secondaryRgb) payload.secondary_color_rgb = secondaryRgb;
-      } else {
+      if (hasSketch) {
         payload.image_b64 = currentImageBase64;
       }
+      if (hasPrompt) {
+        payload.prompt = textPrompt;
+      }
+      if (primaryRgb) payload.primary_color_rgb = primaryRgb;
+      if (secondaryRgb) payload.secondary_color_rgb = secondaryRgb;
 
       const submitRes = await submitPipelineJob(payload);
       const jobId = submitRes.job_id;
 
-      // 3. Poll until completed
+      // 3. Poll for pipeline completion
       let isDone = false;
       let polls = 0;
       const maxPolls = 180;
@@ -156,23 +184,23 @@ export const Workspace: React.FC = () => {
           if (finalPbr) setPbrGlbUrl(finalPbr);
           if (finalRefined) setRefinedGlbUrl(finalRefined);
 
-          setDetectedResult((prev) => ({
-            name: prev?.name || objectLabel,
+          setGenerationSummary((prev) => ({
+            objectName: prev?.objectName || objectLabel,
             primaryHex: prev?.primaryHex || primaryHex,
             secondaryHex: prev?.secondaryHex || secondaryHex,
-            duration: result.metrics?.total_duration_seconds || polls,
+            durationSeconds: result.metrics?.total_duration_seconds || polls,
           }));
 
-          setReconstructionStage('completed', '3D model generated successfully!');
+          setReconstructionStage('completed', '3D asset generated successfully!');
         } else if (statusRes.status === 'failed') {
           throw new Error(statusRes.error || 'Failed to generate 3D model.');
         } else {
-          setStatusText('Creating 3D geometry & baking materials...');
+          setStatusMessage('Generating 3D model...');
         }
       }
     } catch (err: any) {
       console.error(err);
-      setErrorText(err.message || 'An error occurred during 3D generation.');
+      setErrorMessage(err.message || 'An error occurred during 3D generation.');
     } finally {
       setIsGenerating(false);
     }
@@ -184,75 +212,113 @@ export const Workspace: React.FC = () => {
   const handleDownload = (format: 'glb' | 'obj') => {
     const url = format === 'glb' ? activeGlb : activeObj;
     if (!url) return;
-    const filename = `${(detectedResult?.name || 'model').replace(/\s+/g, '_').toLowerCase()}.${format}`;
+    const filename = `${(generationSummary?.objectName || 'model').replace(/\s+/g, '_').toLowerCase()}.${format}`;
     triggerFileDownload(url, filename);
   };
 
   return (
-    <div className="py-6 px-4 lg:px-8 max-w-6xl mx-auto w-full space-y-6">
-      {/* Studio Header */}
+    <div className="py-6 px-4 lg:px-8 max-w-6xl mx-auto w-full space-y-5">
+      {/* Page Title */}
       <div className="text-center max-w-xl mx-auto space-y-1">
-        <h1 className="text-2xl font-bold text-white tracking-tight">
-          Create 3D Model
+        <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+          Sketch Input & 3D Model Generation
         </h1>
         <p className="text-xs text-slate-400">
-          Draw, upload a sketch, or describe what you want in 3D.
+          Supply a visual concept via in-app sketching or image upload to convert into 3D.
         </p>
       </div>
 
-      {errorText && (
+      {errorMessage && (
         <div className="max-w-xl mx-auto p-3 bg-rose-950/40 border border-rose-900/60 rounded-xl text-xs text-rose-300 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-          <span>{errorText}</span>
+          <span>{errorMessage}</span>
         </div>
       )}
 
-      {/* Main Studio: 2 Columns */}
+      {/* Main Studio Grid: Left = Visual Concept Input, Right = Resulting 3D Asset */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Input Card */}
+        {/* Left Column: Sketch Input, Preprocessing & Optional Prompt */}
         <div className="lg:col-span-5 bg-slate-950/70 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
-          {/* 3 Input Tabs */}
-          <div className="grid grid-cols-3 p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-            <button
-              onClick={() => setInputMode('draw')}
-              className={`py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 ${
-                inputMode === 'draw'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <PenTool className="w-3.5 h-3.5" />
-              Draw
-            </button>
-            <button
-              onClick={() => setInputMode('upload')}
-              className={`py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 ${
-                inputMode === 'upload'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Upload className="w-3.5 h-3.5" />
-              Upload
-            </button>
-            <button
-              onClick={() => setInputMode('prompt')}
-              className={`py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 ${
-                inputMode === 'prompt'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              Prompt
-            </button>
+          {/* Section Heading & Mode Selector */}
+          <div className="space-y-2">
+            <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+              1. Supply Visual Concept
+            </span>
+
+            {/* Toggle: In-app sketching vs Image upload */}
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+              <button
+                onClick={() => setSketchMode('draw')}
+                className={`py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 ${
+                  sketchMode === 'draw'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <PenTool className="w-3.5 h-3.5" />
+                In-App Sketching
+              </button>
+              <button
+                onClick={() => setSketchMode('upload')}
+                className={`py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 ${
+                  sketchMode === 'upload'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Image Upload
+              </button>
+            </div>
           </div>
 
-          {/* Active Input Mode Component */}
-          <div className="min-h-[280px]">
-            {inputMode === 'draw' && <DrawingCanvas />}
-            {inputMode === 'upload' && <UploadPanel />}
-            {inputMode === 'prompt' && <PromptTo3DPanel />}
+          {/* Active Sketch Input Component */}
+          <div className="min-h-[260px]">
+            {sketchMode === 'draw' ? <DrawingCanvas /> : <UploadPanel />}
+          </div>
+
+          {/* Input Preparation / Preprocessing */}
+          <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-blue-400" />
+                Input Preprocessing
+              </span>
+              <p className="text-[11px] text-slate-500">
+                Resizing, background handling, contrast & noise reduction
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={preprocessFirst}
+                onChange={(e) => setPreprocessFirst(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          {/* Optional Text Prompt */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
+                <span>Optional Text Prompt</span>
+                <span className="text-[10px] text-slate-400 bg-slate-900 px-1.5 py-0.2 rounded border border-slate-800">
+                  Optional
+                </span>
+              </label>
+              <span className="text-[10px] text-slate-500">
+                Not a prerequisite
+              </span>
+            </div>
+            <input
+              type="text"
+              value={textPrompt}
+              onChange={(e) => setTextPrompt(e.target.value)}
+              placeholder="Describe type, material, color, or style (e.g. Red sports car, wooden legs)..."
+              className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+            />
           </div>
 
           {/* Primary Action Button */}
@@ -264,7 +330,7 @@ export const Workspace: React.FC = () => {
             {isGenerating ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>{statusText || 'Generating 3D model...'}</span>
+                <span>{statusMessage || 'Generating 3D model...'}</span>
               </>
             ) : (
               <>
@@ -274,43 +340,50 @@ export const Workspace: React.FC = () => {
             )}
           </button>
 
-          {/* Result Summary Pill */}
-          {detectedResult && !isGenerating && (
-            <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 flex items-center justify-between text-xs">
+          {/* Result Summary (if generated) */}
+          {generationSummary && !isGenerating && (
+            <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="text-slate-400">Object:</span>
                 <span className="font-semibold text-slate-200 capitalize">
-                  {detectedResult.name}
+                  {generationSummary.objectName}
                 </span>
-                {detectedResult.primaryHex && (
+                {generationSummary.primaryHex && (
                   <span
-                    className="w-3.5 h-3.5 rounded-full border border-slate-700 shadow-sm inline-block"
-                    style={{ backgroundColor: detectedResult.primaryHex }}
-                    title={`Primary Color: ${detectedResult.primaryHex}`}
+                    className="w-3.5 h-3.5 rounded-full border border-slate-700 inline-block shadow-sm"
+                    style={{ backgroundColor: generationSummary.primaryHex }}
+                    title={`Primary Color: ${generationSummary.primaryHex}`}
                   />
                 )}
-                {detectedResult.secondaryHex && (
+                {generationSummary.secondaryHex && (
                   <span
-                    className="w-3.5 h-3.5 rounded-full border border-slate-700 shadow-sm inline-block"
-                    style={{ backgroundColor: detectedResult.secondaryHex }}
-                    title={`Secondary Color: ${detectedResult.secondaryHex}`}
+                    className="w-3.5 h-3.5 rounded-full border border-slate-700 inline-block shadow-sm"
+                    style={{ backgroundColor: generationSummary.secondaryHex }}
+                    title={`Secondary Color: ${generationSummary.secondaryHex}`}
                   />
                 )}
               </div>
-              {detectedResult.duration && (
+              {generationSummary.durationSeconds && (
                 <span className="text-[11px] text-slate-500 font-mono">
-                  {detectedResult.duration.toFixed(1)}s
+                  {generationSummary.durationSeconds.toFixed(1)}s
                 </span>
               )}
             </div>
           )}
         </div>
 
-        {/* Right Column: 3D Studio Viewport & Download */}
+        {/* Right Column: Resulting 3D Asset & Downloads */}
         <div className="lg:col-span-7 space-y-4">
+          <div className="space-y-1">
+            <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+              2. Resulting 3D Asset
+            </span>
+          </div>
+
           <ModelViewer3D />
 
-          {/* Download Buttons */}
+          {/* Download 3D Asset Buttons */}
           <div className="grid grid-cols-2 gap-3">
             <button
               disabled={!activeGlb || isGenerating}
