@@ -8,6 +8,7 @@ import time
 from typing import Dict, Any, Tuple, Optional, Union
 from pathlib import Path
 import numpy as np
+import cv2
 from PIL import Image
 
 from .schemas import PreprocessingReport, ImageDimensions

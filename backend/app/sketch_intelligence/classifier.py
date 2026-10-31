@@ -18,9 +18,9 @@ from PIL import Image
 
 # Ensure backend modules are accessible
 CURRENT_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = CURRENT_DIR.parent
+BACKEND_DIR = CURRENT_DIR.parent.parent
 if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+    sys.path.append(str(BACKEND_DIR))
 
 from .models import get_model
 from .geometry_tags import GeometricFeatureTagger
@@ -29,8 +29,8 @@ from .semantic_generator import SemanticDescriptionGenerator
 from .reconstruction_conditioning import ReconstructionConditioner
 from .gemini_vision_analyzer import gemini_vision_analyzer
 
-from preprocessing.preprocessing_pipeline import SketchPreprocessingPipeline
-from preprocessing.image_loader import ImageLoader
+from app.preprocessing.preprocessing_pipeline import SketchPreprocessingPipeline
+from app.preprocessing.image_loader import ImageLoader
 
 
 class SketchIntelligenceEngine:

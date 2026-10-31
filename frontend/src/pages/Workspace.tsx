@@ -116,10 +116,10 @@ export const Workspace: React.FC = () => {
 
       const payload: any = {
         preferred_model: 'auto',
-        quality_preset: 'high',
+        quality_preset: 'balanced',
         preprocess_first: preprocessFirst,
         auto_refine: true,
-        refine_preset: 'high',
+        refine_preset: 'balanced',
         export_formats: ['glb', 'obj'],
         allow_fallback: true,
         category_override: category,
@@ -140,13 +140,26 @@ export const Workspace: React.FC = () => {
       const submitRes = await submitPipelineJob(payload);
       const jobId = submitRes.job_id;
 
-      // 3. Poll for pipeline completion
+      // 3. Poll for pipeline completion with live stage feedback
+      const STAGE_LABELS: Record<string, string> = {
+        initialized: 'Initializing reconstruction pipeline...',
+        validating_input: 'Validating visual concept input...',
+        preprocessing: 'Preprocessing sketch (resizing, contrast, noise reduction)...',
+        classifying_intent: 'Analyzing object type & visual semantics...',
+        selecting_model: 'Selecting optimal 3D reconstruction model...',
+        reconstructing_3d: 'Generating 3D geometry with AI neural model...',
+        evaluating_mesh: 'Evaluating mesh quality & watertightness...',
+        refining_mesh: 'Refining surfaces & topology...',
+        synthesizing_pbr: 'Synthesizing realistic PBR textures & materials...',
+        packaging_export: 'Packaging GLB & OBJ 3D assets...',
+      };
+
       let isDone = false;
       let polls = 0;
-      const maxPolls = 180;
+      const maxPolls = 400;
 
       while (!isDone && polls < maxPolls) {
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 1500));
         polls++;
 
         const statusRes = await getPipelineStatus(jobId);
@@ -171,12 +184,12 @@ export const Workspace: React.FC = () => {
             {
               status: 'completed',
               job_id: jobId,
-              model_used: result.metrics?.model_used || 'Procedural / PBR Engine',
+              model_used: result.metrics?.model_used || 'InstantMesh / TRELLIS AI',
               downloads: {
                 glb: finalGlb,
                 obj: finalObj,
               },
-              inference_time_seconds: result.metrics?.total_duration_seconds || polls,
+              inference_time_seconds: result.metrics?.total_duration_seconds || Math.round(polls * 1.5),
             },
             finalGlb
           );
@@ -188,15 +201,22 @@ export const Workspace: React.FC = () => {
             objectName: prev?.objectName || objectLabel,
             primaryHex: prev?.primaryHex || primaryHex,
             secondaryHex: prev?.secondaryHex || secondaryHex,
-            durationSeconds: result.metrics?.total_duration_seconds || polls,
+            durationSeconds: result.metrics?.total_duration_seconds || Math.round(polls * 1.5),
           }));
 
           setReconstructionStage('completed', '3D asset generated successfully!');
         } else if (statusRes.status === 'failed') {
           throw new Error(statusRes.error || 'Failed to generate 3D model.');
         } else {
-          setStatusMessage('Generating 3D model...');
+          const stageKey = statusRes.current_stage || '';
+          const stageLabel = STAGE_LABELS[stageKey] || 'Generating 3D model...';
+          const elapsed = Math.round(polls * 1.5);
+          setStatusMessage(`${stageLabel} (${elapsed}s)`);
         }
+      }
+
+      if (!isDone) {
+        throw new Error('Pipeline generation timed out. Please try again or check server logs.');
       }
     } catch (err: any) {
       console.error(err);

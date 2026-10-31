@@ -330,17 +330,16 @@ class StageExecutor:
         # Trigger procedural fallback if primary model output is unacceptable
         if is_unacceptable and allow_fallback and primary_model != "procedural":
             category = semantic_metadata.get("predicted_category") or semantic_metadata.get("category")
-            if CategoryGeometryTemplates.is_category_supported(category):
-                print(f"[StageExecutor] Fallback triggered! Reason: {rejection_reason}. Executing procedural reconstruction...")
-                fallback_adapter = model_registry.get_model("procedural")
-                if fallback_adapter:
-                    fallback_resp = fallback_adapter.reconstruct(rec_req)
-                    if fallback_resp.success:
-                        fallback_telemetry["fallback_triggered"] = True
-                        fallback_telemetry["fallback_reason"] = rejection_reason
-                        fallback_telemetry["original_candidate_model"] = primary_model
-                        resp = fallback_resp
-                        resp.model_name = f"{primary_model} -> procedural (fallback)"
+            print(f"[StageExecutor] Fallback triggered! Reason: {rejection_reason}. Executing procedural reconstruction...")
+            fallback_adapter = model_registry.get_model("procedural")
+            if fallback_adapter:
+                fallback_resp = fallback_adapter.reconstruct(rec_req)
+                if fallback_resp.success:
+                    fallback_telemetry["fallback_triggered"] = True
+                    fallback_telemetry["fallback_reason"] = rejection_reason
+                    fallback_telemetry["original_candidate_model"] = primary_model
+                    resp = fallback_resp
+                    resp.model_name = f"{primary_model} -> procedural (fallback)"
 
         if not resp.success:
             raise PipelineException(PipelineStage.RECONSTRUCTING_3D, f"Reconstruction failed: {resp.error}")

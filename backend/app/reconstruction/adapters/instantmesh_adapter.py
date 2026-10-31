@@ -128,7 +128,7 @@ class InstantMeshAdapter(BaseReconstructionAdapter):
         local_zero123 = str(INSTANTMESH_DIR / "zero123plus")
         print(f"[InstantMesh] Loading Zero123++ diffusion pipeline (FP16)...")
 
-        steps = 15 if quality_preset in ["fast", "ultra_fast"] else (25 if quality_preset == "balanced" else 40)
+        steps = 10 if quality_preset == "ultra_fast" else (14 if quality_preset == "fast" else (18 if quality_preset == "balanced" else 22))
 
         pipeline = DiffusionPipeline.from_pretrained(
             "sudo-ai/zero123plus-v1.1",
