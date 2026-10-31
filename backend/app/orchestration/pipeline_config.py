@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 class PipelineConfig(BaseModel):
     image_path: Optional[str] = None
     image_b64: Optional[str] = None
-    preferred_model: str = Field(default="auto", description="auto, instantmesh, procedural, triposr")
+    prompt: Optional[str] = None
+    preferred_model: str = Field(default="auto", description="auto, instantmesh, procedural, triposr, meshy, tripo, rodin")
     quality_preset: str = Field(default="balanced", description="fast, balanced, high, ultra_fast")
     preprocess_first: bool = True
     auto_refine: bool = True
@@ -26,3 +27,6 @@ class PipelineConfig(BaseModel):
     enable_packaging: bool = Field(default=True, description="Whether to generate professional multi-format ZIP asset bundle")
     cloud_provider: Optional[str] = Field(default="auto", description="auto, meshy, tripo, rodin, local")
     metadata: Optional[Dict[str, Any]] = None
+    color_palette: Optional[Dict[str, Any]] = None
+    primary_color_rgb: Optional[List[int]] = None
+    secondary_color_rgb: Optional[List[int]] = None

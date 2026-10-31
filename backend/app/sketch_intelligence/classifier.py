@@ -27,6 +27,7 @@ from .geometry_tags import GeometricFeatureTagger
 from .uncertainty import UncertaintyEstimator
 from .semantic_generator import SemanticDescriptionGenerator
 from .reconstruction_conditioning import ReconstructionConditioner
+from .gemini_vision_analyzer import gemini_vision_analyzer
 
 from preprocessing.preprocessing_pipeline import SketchPreprocessingPipeline
 from preprocessing.image_loader import ImageLoader
@@ -156,7 +157,7 @@ class SketchIntelligenceEngine:
                 "metadata": stage5_report.metadata
             }
 
-        # Model Inference
+        # Model Inference (Local ResNet)
         with torch.no_grad():
             logits = self.model(tensor)
             probs = F.softmax(logits, dim=1).squeeze(0).cpu().numpy()
@@ -164,36 +165,84 @@ class SketchIntelligenceEngine:
         # Uncertainty Estimation
         uncertainty_info = self.uncertainty_estimator.evaluate_predictions(probs, self.class_names)
 
+        # Advanced Multimodal Vision & Color Analysis (Google Gemini / OpenAI Vision)
+        ai_vision_info = {}
+        try:
+            ai_vision_info = gemini_vision_analyzer.analyze_sketch(image_input)
+        except Exception as e:
+            print(f"[SketchIntelligenceEngine] AI vision warning: {e}")
+
+        # If Gemini returned a verified canonical category, synthesize with local model
+        final_category = uncertainty_info["predicted_category"]
+        predicted_object_name = uncertainty_info["predicted_category"].replace("_", " ").title()
+
+        if ai_vision_info and ai_vision_info.get("success"):
+            ai_cat = ai_vision_info.get("category")
+            if ai_cat and ai_cat != "object":
+                final_category = ai_cat
+            if ai_vision_info.get("predicted_object"):
+                predicted_object_name = str(ai_vision_info.get("predicted_object")).strip().title()
+
+        # Color extraction attributes
+        is_colorful = bool(ai_vision_info.get("is_colorful", False))
+        primary_color_rgb = ai_vision_info.get("primary_color_rgb", [30, 30, 35])
+        primary_color_hex = ai_vision_info.get("primary_color_hex", "#1E1E23")
+        secondary_color_rgb = ai_vision_info.get("secondary_color_rgb", [240, 240, 245])
+        secondary_color_hex = ai_vision_info.get("secondary_color_hex", "#F0F0F5")
+        dominant_colors = ai_vision_info.get("dominant_colors", [])
+
         # Semantic Description & Hints
         semantic_info = SemanticDescriptionGenerator.generate(
-            prediction_result=uncertainty_info,
+            prediction_result={
+                **uncertainty_info,
+                "predicted_category": final_category
+            },
             geometric_tags=geometric_tags,
             geometry_metrics=geometry_metrics
         )
 
+        # Append visual color description if colorful
+        desc = semantic_info["semantic_description"]
+        if is_colorful and primary_color_hex:
+            desc += f" Dominant color palette: {primary_color_hex} with accent {secondary_color_hex}."
+
         # Reconstruction Conditioning Payload
         conditioning = ReconstructionConditioner.build_conditioning_payload(
-            category=uncertainty_info["predicted_category"],
-            confidence=uncertainty_info["top_confidence"],
+            category=final_category,
+            confidence=ai_vision_info.get("confidence", uncertainty_info["top_confidence"]),
             is_ambiguous=uncertainty_info["is_ambiguous"],
             geometric_tags=geometric_tags,
             geometry_metrics=geometry_metrics
         )
+        conditioning["is_colorful"] = is_colorful
+        conditioning["primary_color_rgb"] = primary_color_rgb
+        conditioning["primary_color_hex"] = primary_color_hex
+        conditioning["secondary_color_rgb"] = secondary_color_rgb
+        conditioning["secondary_color_hex"] = secondary_color_hex
 
         elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
 
         return {
-            "predicted_category": uncertainty_info["predicted_category"],
-            "top_confidence": uncertainty_info["top_confidence"],
+            "predicted_category": final_category,
+            "predicted_object": predicted_object_name,
+            "top_confidence": float(ai_vision_info.get("confidence", uncertainty_info["top_confidence"])),
             "confidence_gap": uncertainty_info["confidence_gap"],
             "is_ambiguous": uncertainty_info["is_ambiguous"],
             "uncertainty_level": uncertainty_info["uncertainty_level"],
             "top_predictions": uncertainty_info["top_predictions"],
             "alternative_categories": uncertainty_info["alternative_categories"],
             "geometric_tags": geometric_tags,
-            "semantic_description": semantic_info["semantic_description"],
+            "semantic_description": desc,
             "reconstruction_hints": semantic_info["reconstruction_hints"],
             "reconstruction_conditioning": conditioning,
+            "is_colorful": is_colorful,
+            "primary_color_rgb": primary_color_rgb,
+            "primary_color_hex": primary_color_hex,
+            "secondary_color_rgb": secondary_color_rgb,
+            "secondary_color_hex": secondary_color_hex,
+            "dominant_colors": dominant_colors,
+            "ai_vision_model": ai_vision_info.get("ai_model_used", "local_resnet"),
+            "prompt_3d": ai_vision_info.get("prompt_3d", ""),
             "processing_time_ms": elapsed_ms,
             "model_version": self.config.get("model_version", "1.0.0"),
             "selected_architecture": self.config.get("selected_architecture", "Unknown"),

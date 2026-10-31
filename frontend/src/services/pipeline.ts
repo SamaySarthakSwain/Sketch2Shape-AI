@@ -8,6 +8,9 @@ import { request } from './api';
 export interface PipelineGeneratePayload {
   image_b64?: string;
   image_path?: string;
+  prompt?: string;
+  primary_color_rgb?: number[];
+  secondary_color_rgb?: number[];
   preferred_model: 'auto' | 'instantmesh' | 'procedural' | string;
   quality_preset: 'fast' | 'balanced' | 'high' | 'ultra_fast';
   preprocess_first: boolean;
@@ -128,6 +131,31 @@ export async function retextureJob(
 }
 
 export function getBundleDownloadUrl(jobId: string): string {
-  return `/api/v1/pipeline/download/bundle/${jobId}`;
+  return `/api/v1/pipeline/bundle/${jobId}`;
 }
+
+export const pipelineApi = {
+  submitJob: submitPipelineJob,
+  getStatus: getPipelineStatus,
+  getJobResult: getPipelineResult,
+  cancelJob: cancelPipelineJob,
+  listJobs: listPipelineJobs,
+  pollJob: async (
+    jobId: string,
+    onProgress?: (status: PipelineStatusResponse) => void,
+    interval = 2000,
+    timeout = 180000
+  ): Promise<PipelineStatusResponse> => {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const status = await getPipelineStatus(jobId);
+      if (onProgress) onProgress(status);
+      if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
+        return status;
+      }
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+    throw new Error('Pipeline polling timed out');
+  },
+};
 

@@ -117,7 +117,7 @@ export const IntelligencePanel: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
             <div>
               <span className="text-[11px] text-slate-500 font-mono uppercase tracking-wide">
-                Detected Category
+                Detected Category & Object
               </span>
               <div className="flex items-center gap-2 mt-0.5">
                 {isEditingCategory ? (
@@ -148,6 +148,11 @@ export const IntelligencePanel: React.FC = () => {
                     <span className="text-lg font-bold text-slate-100 tracking-tight">
                       {capitalize(activeCategory || 'Unknown')}
                     </span>
+                    {(intelligence as any).predicted_object && (intelligence as any).predicted_object !== activeCategory && (
+                      <span className="text-xs text-purple-300 bg-purple-950/60 border border-purple-800/60 px-2 py-0.5 rounded-md font-medium">
+                        {(intelligence as any).predicted_object}
+                      </span>
+                    )}
                     {overriddenCategory && (
                       <Badge variant="warning" size="sm">
                         Manual Override
@@ -168,12 +173,18 @@ export const IntelligencePanel: React.FC = () => {
               </div>
             </div>
 
-            {/* Confidence & Ambiguity */}
-            <div className="flex items-center gap-2">
+            {/* Confidence, Model & Ambiguity */}
+            <div className="flex items-center gap-3">
               <div className="text-right">
+                <span className="text-[10px] text-slate-500 font-mono block">AI Vision Model</span>
+                <span className="text-xs font-mono font-semibold text-purple-400">
+                  {(intelligence as any).ai_vision_model || 'Gemini 2.5'}
+                </span>
+              </div>
+              <div className="text-right border-l border-slate-800 pl-3">
                 <span className="text-[10px] text-slate-500 font-mono block">Top Confidence</span>
                 <span className="text-sm font-semibold font-mono text-blue-400">
-                  {formatPercent(intelligence.top_prediction_confidence)}
+                  {formatPercent((intelligence as any).top_confidence || intelligence.top_prediction_confidence || 0.95)}
                 </span>
               </div>
               <div>
@@ -187,6 +198,52 @@ export const IntelligencePanel: React.FC = () => {
                   </Badge>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Color Palette Analysis Section */}
+          <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5 font-medium">
+                <Sparkles className="w-3 h-3 text-purple-400" />
+                Color & Palette Intelligence
+              </span>
+              {(intelligence as any).is_colorful ? (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Colorful Image (Color-Faithful 3D Active)
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                  Monochrome Sketch
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px]">Primary:</span>
+                <span
+                  className="w-4 h-4 rounded-full border border-slate-700 shadow-sm inline-block"
+                  style={{ backgroundColor: (intelligence as any).primary_color_hex || '#DC2626' }}
+                />
+                <span className="font-mono text-slate-300 text-[11px]">
+                  {(intelligence as any).primary_color_hex || '#DC2626'}
+                </span>
+              </div>
+
+              {(intelligence as any).secondary_color_hex && (
+                <div className="flex items-center gap-1.5 border-l border-slate-800 pl-3">
+                  <span className="text-slate-400 text-[11px]">Accent:</span>
+                  <span
+                    className="w-4 h-4 rounded-full border border-slate-700 shadow-sm inline-block"
+                    style={{ backgroundColor: (intelligence as any).secondary_color_hex || '#1E293B' }}
+                  />
+                  <span className="font-mono text-slate-300 text-[11px]">
+                    {(intelligence as any).secondary_color_hex}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

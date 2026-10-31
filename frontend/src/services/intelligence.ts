@@ -18,3 +18,13 @@ export async function analyzeSketch(
     body: formData,
   });
 }
+
+export async function analyzePrompt(prompt: string): Promise<any> {
+  return request<any>('/api/v1/intelligence/analyze-prompt', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prompt }),
+  });
+}

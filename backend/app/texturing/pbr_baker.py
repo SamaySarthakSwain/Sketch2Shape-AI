@@ -29,11 +29,14 @@ class PBRBaker:
         material_override: Optional[str] = None,
         texture_resolution: int = 1024,
         uv_mode: str = "box",
-        output_dir: Optional[str] = None
+        output_dir: Optional[str] = None,
+        color_palette: Optional[Dict[str, Any]] = None
     ) -> Tuple[trimesh.Trimesh, Dict[str, str]]:
         """
         Takes an untextured mesh, unwraps UVs, generates PBR texture maps,
         applies glTF 2.0 PBR material, and optionally saves texture PNGs.
+        If color_palette specifies custom or sketch-extracted colors,
+        faithfully tints the base color and albedo texture to match.
         Returns:
             (textured_mesh, dict_of_saved_texture_paths)
         """
@@ -43,6 +46,16 @@ class PBRBaker:
             style=style,
             material_override=material_override
         )
+
+        # 1b. Adapt base color to sketch / prompt color palette if colorful
+        if color_palette:
+            is_colorful = color_palette.get("is_colorful", False)
+            prim_rgb = color_palette.get("primary_color_rgb")
+            if prim_rgb and (is_colorful or not material_override):
+                material_def.base_color_rgb = (int(prim_rgb[0]), int(prim_rgb[1]), int(prim_rgb[2]))
+            sec_rgb = color_palette.get("secondary_color_rgb")
+            if sec_rgb and (is_colorful or not material_override):
+                material_def.secondary_color_rgb = (int(sec_rgb[0]), int(sec_rgb[1]), int(sec_rgb[2]))
 
         # 2. Select appropriate UV unwrapping mode based on category
         if category in ["vase", "bottle", "bowl", "cup", "mug", "coffee cup"]:

@@ -184,7 +184,12 @@ class ProceduralReconstructionEngine(BaseReconstructionEngine):
         if category and CategoryGeometryTemplates.is_category_supported(category):
             if category in ["vase", "bottle", "bowl"]:
                 return self.reconstruct_surface_of_revolution(stroke_mask)
-            return CategoryGeometryTemplates.generate_category_mesh(category, binary_mask=stroke_mask)
+            return CategoryGeometryTemplates.generate_category_mesh(
+                category,
+                binary_mask=stroke_mask,
+                color_rgb=metadata.get("primary_color_rgb"),
+                secondary_color_rgb=metadata.get("secondary_color_rgb")
+            )
 
         # 2. Rotational mode if explicitly flagged
         mode = metadata.get("recommended_3d_mode")

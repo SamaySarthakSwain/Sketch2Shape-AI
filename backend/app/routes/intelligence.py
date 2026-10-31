@@ -10,6 +10,7 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException
 from pydantic import BaseModel
 
 from app.sketch_intelligence.classifier import SketchIntelligenceEngine
+from app.sketch_intelligence.gemini_vision_analyzer import gemini_vision_analyzer
 
 router = APIRouter(prefix="/api/v1/intelligence", tags=["intelligence"])
 
@@ -27,6 +28,10 @@ def get_engine() -> SketchIntelligenceEngine:
 class AnalyzeRequest(BaseModel):
     image_base64: Optional[str] = None
     bypass_preprocessing: bool = False
+
+
+class AnalyzePromptRequest(BaseModel):
+    prompt: str
 
 
 @router.get("/health")
@@ -76,3 +81,19 @@ async def analyze_sketch(
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@router.post("/analyze-prompt")
+async def analyze_prompt(req: AnalyzePromptRequest):
+    """
+    Analyzes a text prompt for Text-to-3D generation using Gemini / OpenAI:
+    predicts the object class, visual properties, and extracts the color palette.
+    """
+    if not req.prompt or not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt string cannot be empty.")
+
+    try:
+        results = gemini_vision_analyzer.analyze_prompt(req.prompt.strip())
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prompt analysis failed: {str(e)}")

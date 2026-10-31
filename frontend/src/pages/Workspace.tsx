@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Upload, PenTool, Brain, Box, Sparkles, AlertCircle } from 'lucide-react';
+import { Upload, PenTool, Brain, Box, Sparkles, AlertCircle, Wand2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { UploadPanel } from '../components/upload/UploadPanel';
 import { DrawingCanvas } from '../components/canvas/DrawingCanvas';
+import { PromptTo3DPanel } from '../components/prompt/PromptTo3DPanel';
 import { IntelligencePanel } from '../components/intelligence/IntelligencePanel';
 import { ReconstructionControls } from '../components/reconstruction/ReconstructionControls';
 import { MaterialStyleControls } from '../components/materials/MaterialStyleControls';
@@ -15,7 +16,7 @@ import { DemoModeSelector } from '../components/demo/DemoModeSelector';
 
 
 export const Workspace: React.FC = () => {
-  const [inputMode, setInputMode] = useState<'upload' | 'draw'>('upload');
+  const [inputMode, setInputMode] = useState<'upload' | 'draw' | 'prompt'>('upload');
   const {
     currentMeshResult,
     reconstructionStage,
@@ -72,13 +73,13 @@ export const Workspace: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Input, Intelligence, and Reconstruction Controls */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Sketch Input Mode Switcher */}
+          {/* Sketch / Prompt Input Mode Switcher */}
           <div className="border border-slate-800 rounded-xl bg-slate-950/60 p-4 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div className="flex items-center gap-2">
                 <PenTool className="w-4 h-4 text-blue-400" />
                 <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  2D Sketch Source
+                  2D Input & Generation Source
                 </h3>
               </div>
               <div className="flex p-0.5 rounded-lg bg-slate-900 border border-slate-800">
@@ -104,11 +105,24 @@ export const Workspace: React.FC = () => {
                   <PenTool className="w-3 h-3" />
                   Draw
                 </button>
+                <button
+                  onClick={() => setInputMode('prompt')}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                    inputMode === 'prompt'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Wand2 className="w-3 h-3 text-purple-300" />
+                  Prompt to 3D
+                </button>
               </div>
             </div>
 
             {/* Input Component */}
-            {inputMode === 'upload' ? <UploadPanel /> : <DrawingCanvas />}
+            {inputMode === 'upload' && <UploadPanel />}
+            {inputMode === 'draw' && <DrawingCanvas />}
+            {inputMode === 'prompt' && <PromptTo3DPanel />}
           </div>
 
           {/* Sketch Intelligence Panel */}

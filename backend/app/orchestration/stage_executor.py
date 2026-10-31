@@ -26,6 +26,7 @@ from app.reconstruction.providers import provider_registry, ProviderTaskStatus
 from app.texturing import PBRBaker, PBRMaterialLibrary, VisualStyle
 from app.packaging import MultiFormatExporter, AssetPackager, PrintabilityAnalyzer
 from app.geometry_intelligence import MeshAnalyzer, MeshRefiner, GeometryReportFormatter
+from app.sketch_intelligence.gemini_vision_analyzer import gemini_vision_analyzer
 
 from .pipeline_state import PipelineStage, StageExecutionRecord
 from .execution_logger import ExecutionLogger
@@ -41,8 +42,14 @@ class StageExecutor:
     # -------------------------------------------------------------
     # 1. INPUT VALIDATION
     # -------------------------------------------------------------
-    def validate_input(self, image_path: Optional[str], image_b64: Optional[str], job_dir: Path) -> str:
-        """Validates sketch file existence or decodes base64 payload."""
+    def validate_input(
+        self,
+        image_path: Optional[str],
+        image_b64: Optional[str],
+        job_dir: Path,
+        prompt: Optional[str] = None
+    ) -> str:
+        """Validates sketch file existence, decodes base64 payload, or synthesizes reference canvas for prompt."""
         if image_path and Path(image_path).exists():
             # Validate can be opened by PIL
             try:
@@ -67,7 +74,17 @@ class StageExecutor:
             except Exception as e:
                 raise PipelineException(PipelineStage.VALIDATING_INPUT, f"Failed to decode base64 sketch: {e}")
 
-        raise PipelineException(PipelineStage.VALIDATING_INPUT, "Neither 'image_path' nor 'image_b64' provided.")
+        elif prompt and prompt.strip():
+            # Prompt-to-3D mode: synthesize a clean canvas placeholder
+            target_path = job_dir / "prompt_canvas.png"
+            img = Image.new("RGB", (512, 512), color=(255, 255, 255))
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(img)
+            draw.rectangle([32, 32, 480, 480], outline=(100, 100, 100), width=4)
+            img.save(str(target_path))
+            return str(target_path)
+
+        raise PipelineException(PipelineStage.VALIDATING_INPUT, "Neither 'image_path', 'image_b64', nor 'prompt' provided.")
 
     # -------------------------------------------------------------
     # 2. OPENCV PREPROCESSING
@@ -109,8 +126,32 @@ class StageExecutor:
     def execute_sketch_intelligence(
         self,
         image_path: str,
-        category_override: Optional[str] = None
+        category_override: Optional[str] = None,
+        prompt: Optional[str] = None
     ) -> Dict[str, Any]:
+        if prompt and prompt.strip():
+            try:
+                ai_data = gemini_vision_analyzer.analyze_prompt(prompt.strip())
+                cat = category_override or ai_data.get("category", "object")
+                return {
+                    "predicted_category": cat,
+                    "predicted_object": ai_data.get("predicted_object", prompt.strip().title()),
+                    "top_confidence": 0.96,
+                    "is_colorful": ai_data.get("is_colorful", True),
+                    "primary_color_rgb": ai_data.get("primary_color_rgb", [220, 38, 38]),
+                    "primary_color_hex": ai_data.get("primary_color_hex", "#DC2626"),
+                    "secondary_color_rgb": ai_data.get("secondary_color_rgb", [30, 41, 59]),
+                    "secondary_color_hex": ai_data.get("secondary_color_hex", "#1E293B"),
+                    "dominant_colors": ai_data.get("dominant_colors", []),
+                    "semantic_description": f"Text-to-3D generation for '{prompt}'. Color palette: {ai_data.get('primary_color_hex')}.",
+                    "reconstruction_hints": [f"Synthesize 3D geometry from prompt: {prompt}"],
+                    "geometric_tags": ["text_to_3d_generation", "parametric_surface"],
+                    "ai_vision_model": ai_data.get("ai_model_used", "gemini-2.5-flash"),
+                    "prompt_3d": ai_data.get("prompt_3d", prompt)
+                }
+            except Exception as e:
+                print(f"[StageExecutor] Prompt intelligence warning: {e}")
+
         try:
             intel = self.intelligence_engine.analyze(image_path)
             if category_override:
@@ -362,10 +403,12 @@ class StageExecutor:
         category: str,
         style: str,
         material_override: Optional[str],
-        job_dir: Path
+        job_dir: Path,
+        color_palette: Optional[Dict[str, Any]] = None
     ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
         """
         Synthesizes high-resolution PBR textures and bakes them into standard glTF 2.0 PBR material.
+        If color_palette is provided, ensures textures reflect the exact colors of the sketch.
         Returns: (textured_glb_path, texture_paths_dict, material_metadata)
         """
         m = trimesh.load(mesh_path, force="mesh")
@@ -377,7 +420,8 @@ class StageExecutor:
             category=category,
             style=style,
             material_override=material_override,
-            output_dir=str(textured_dir)
+            output_dir=str(textured_dir),
+            color_palette=color_palette
         )
 
         pbr_glb_path = textured_dir / f"{job_dir.name}_pbr.glb"

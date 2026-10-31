@@ -1,7 +1,20 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { PenTool, Eraser, RotateCcw, RotateCw, Trash2, ArrowRight } from 'lucide-react';
+import { PenTool, Eraser, RotateCcw, RotateCw, Trash2, ArrowRight, Palette } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { Button } from '../common/Button';
+
+const PRESET_COLORS = [
+  { name: 'Ink Black', hex: '#000000' },
+  { name: 'Crimson Red', hex: '#DC2626' },
+  { name: 'Cobalt Blue', hex: '#2563EB' },
+  { name: 'Emerald Green', hex: '#059669' },
+  { name: 'Amber Gold', hex: '#D97706' },
+  { name: 'Royal Purple', hex: '#7C3AED' },
+  { name: 'Fiery Orange', hex: '#EA580C' },
+  { name: 'Teal Cyan', hex: '#0891B2' },
+  { name: 'Rose Pink', hex: '#EC4899' },
+  { name: 'Dark Slate', hex: '#334155' },
+];
 
 export const DrawingCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -9,6 +22,7 @@ export const DrawingCanvas: React.FC = () => {
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [brushSize, setBrushSize] = useState<number>(4);
+  const [strokeColor, setStrokeColor] = useState<string>('#000000');
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -70,7 +84,7 @@ export const DrawingCanvas: React.FC = () => {
     const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
 
     ctx.lineWidth = brushSize;
-    ctx.strokeStyle = tool === 'pen' ? '#000000' : '#ffffff';
+    ctx.strokeStyle = tool === 'pen' ? strokeColor : '#ffffff';
     ctx.lineTo(x, y);
     ctx.stroke();
   };
@@ -111,6 +125,7 @@ export const DrawingCanvas: React.FC = () => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     saveHistory();
@@ -190,6 +205,55 @@ export const DrawingCanvas: React.FC = () => {
             icon={<Trash2 className="w-3.5 h-3.5" />}
             title="Clear Canvas"
           />
+        </div>
+      </div>
+
+      {/* Vibrant Color Palette Selector */}
+      <div className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs space-y-2">
+        <div className="flex items-center justify-between text-slate-300">
+          <div className="flex items-center gap-1.5 font-medium">
+            <Palette className="w-3.5 h-3.5 text-blue-400" />
+            <span>Stroke Color:</span>
+            <span
+              className="inline-block w-3.5 h-3.5 rounded-full border border-slate-700 shadow-sm ml-1"
+              style={{ backgroundColor: strokeColor }}
+            />
+            <span className="font-mono text-slate-400 text-[11px] uppercase">{strokeColor}</span>
+          </div>
+          <span className="text-[11px] text-slate-400">AI textures 3D model to these colors</span>
+        </div>
+
+        <div className="flex items-center flex-wrap gap-2">
+          {PRESET_COLORS.map((c) => (
+            <button
+              key={c.hex}
+              title={c.name}
+              onClick={() => {
+                setStrokeColor(c.hex);
+                setTool('pen');
+              }}
+              className={`w-6 h-6 rounded-full transition-transform border ${
+                strokeColor.toLowerCase() === c.hex.toLowerCase() && tool === 'pen'
+                  ? 'ring-2 ring-blue-500 scale-110 border-white'
+                  : 'border-slate-700 hover:scale-105'
+              }`}
+              style={{ backgroundColor: c.hex }}
+            />
+          ))}
+
+          {/* Custom Color Input */}
+          <label className="flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer ml-auto bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded border border-slate-700 transition-colors">
+            <span>Custom:</span>
+            <input
+              type="color"
+              value={strokeColor}
+              onChange={(e) => {
+                setStrokeColor(e.target.value);
+                setTool('pen');
+              }}
+              className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
+            />
+          </label>
         </div>
       </div>
 

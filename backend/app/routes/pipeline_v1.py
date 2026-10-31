@@ -21,13 +21,14 @@ router = APIRouter(prefix="/api/v1/pipeline", tags=["Pipeline V1"])
 class PipelineGenerateRequest(BaseModel):
     image_b64: Optional[str] = Field(default=None, description="Base64 encoded PNG/JPEG sketch")
     image_path: Optional[str] = Field(default=None, description="Server-side image file path")
+    prompt: Optional[str] = Field(default=None, description="Natural language prompt for Text-to-3D mode")
     preferred_model: str = Field(default="auto", description="auto, instantmesh, procedural, meshy, tripo, rodin")
     quality_preset: str = Field(default="balanced", description="fast, balanced, high, ultra_fast")
     preprocess_first: bool = Field(default=True, description="Whether to run OpenCV preprocessing")
     auto_refine: bool = Field(default=True, description="Whether to run mesh refinement")
     refine_preset: str = Field(default="balanced", description="fast, balanced, high")
     export_formats: List[str] = Field(default=["glb", "obj", "stl", "3mf", "usdz", "gltf"], description="Mesh formats to export")
-    allow_fallback: bool = Field(default=True, description="Fallback to procedural if primary fails or under-tessellates")
+    allow_fallback: bool = True
     category_override: Optional[str] = Field(default=None, description="Override predicted category")
     visual_style: str = Field(default="realistic", description="realistic, stylized, cartoon, low_poly, product_render, futuristic, metallic, matte, glossy")
     material_override: Optional[str] = Field(default=None, description="Specific material from library")
@@ -35,6 +36,8 @@ class PipelineGenerateRequest(BaseModel):
     enable_packaging: bool = Field(default=True, description="Generate full ZIP asset bundle")
     cloud_provider: Optional[str] = Field(default="auto", description="auto, meshy, tripo, rodin, local")
     async_execution: bool = Field(default=True, description="If true, returns immediately with job_id")
+    primary_color_rgb: Optional[List[int]] = None
+    secondary_color_rgb: Optional[List[int]] = None
 
 
 
@@ -60,14 +63,15 @@ def _format_job_response(job: PipelineJob) -> Dict[str, Any]:
     return job_dict
 
 
-@router.post("/generate", summary="Trigger unified sketch-to-3D reconstruction pipeline")
+@router.post("/generate", summary="Trigger unified sketch-to-3D or prompt-to-3D reconstruction pipeline")
 async def generate_3d_pipeline(req: PipelineGenerateRequest):
-    if not req.image_b64 and not req.image_path:
-        raise HTTPException(status_code=400, detail="Must provide either 'image_b64' or 'image_path'")
+    if not req.image_b64 and not req.image_path and not req.prompt:
+        raise HTTPException(status_code=400, detail="Must provide either 'image_b64', 'image_path', or 'prompt'")
 
     config = PipelineConfig(
         image_b64=req.image_b64,
         image_path=req.image_path,
+        prompt=req.prompt,
         preferred_model=req.preferred_model,
         quality_preset=req.quality_preset,
         preprocess_first=req.preprocess_first,
@@ -81,6 +85,8 @@ async def generate_3d_pipeline(req: PipelineGenerateRequest):
         enable_pbr=req.enable_pbr,
         enable_packaging=req.enable_packaging,
         cloud_provider=req.cloud_provider,
+        primary_color_rgb=req.primary_color_rgb,
+        secondary_color_rgb=req.secondary_color_rgb,
     )
 
     if req.async_execution:

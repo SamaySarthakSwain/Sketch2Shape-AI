@@ -44,19 +44,39 @@ class CategoryGeometryTemplates:
         cat_lower = category.lower().strip()
         return cat_lower in SUPPORTED_PROCEDURAL_CATEGORIES
 
+    @staticmethod
+    def _apply_submesh_color(mesh: trimesh.Trimesh, rgb: Tuple[int, int, int]) -> trimesh.Trimesh:
+        """Applies solid RGB vertex color to a trimesh geometry."""
+        v_count = len(mesh.vertices)
+        colors = np.zeros((v_count, 4), dtype=np.uint8)
+        colors[:, 0] = int(rgb[0])
+        colors[:, 1] = int(rgb[1])
+        colors[:, 2] = int(rgb[2])
+        colors[:, 3] = 255
+        mesh.visual.vertex_colors = colors
+        return mesh
+
     @classmethod
-    def build_chair(cls, scale: float = 0.9) -> trimesh.Trimesh:
+    def build_chair(
+        cls,
+        scale: float = 0.9,
+        color_rgb: Optional[Tuple[int, int, int]] = None,
+        secondary_color_rgb: Optional[Tuple[int, int, int]] = None
+    ) -> trimesh.Trimesh:
         """Constructs a watertight 3D chair: seat + backrest + 4 legs."""
-        seat = trimesh.creation.box(extents=[0.7, 0.08, 0.7])
+        c_main = color_rgb or (165, 115, 68)
+        c_sec = secondary_color_rgb or (80, 52, 30)
+
+        seat = cls._apply_submesh_color(trimesh.creation.box(extents=[0.7, 0.08, 0.7]), c_main)
         seat.apply_translation([0.0, 0.45, 0.0])
 
-        back = trimesh.creation.box(extents=[0.7, 0.7, 0.08])
+        back = cls._apply_submesh_color(trimesh.creation.box(extents=[0.7, 0.7, 0.08]), c_main)
         back.apply_translation([0.0, 0.8, -0.31])
 
         legs = []
         for dx in [-0.3, 0.3]:
             for dz in [-0.3, 0.3]:
-                leg = trimesh.creation.cylinder(radius=0.035, height=0.45, sections=16)
+                leg = cls._apply_submesh_color(trimesh.creation.cylinder(radius=0.035, height=0.45, sections=16), c_sec)
                 leg.apply_translation([dx, 0.225, dz])
                 legs.append(leg)
 
@@ -66,17 +86,26 @@ class CategoryGeometryTemplates:
         return mesh
 
     @classmethod
-    def build_car(cls, scale: float = 0.9) -> trimesh.Trimesh:
+    def build_car(
+        cls,
+        scale: float = 0.9,
+        color_rgb: Optional[Tuple[int, int, int]] = None,
+        secondary_color_rgb: Optional[Tuple[int, int, int]] = None
+    ) -> trimesh.Trimesh:
         """Constructs a watertight 3D car: chassis + cabin + 4 wheels."""
-        chassis = trimesh.creation.box(extents=[1.2, 0.25, 0.6])
+        c_body = color_rgb or (185, 25, 30)
+        c_cabin = secondary_color_rgb or (50, 60, 75)
+        c_wheel = (35, 35, 38)
 
-        cabin = trimesh.creation.box(extents=[0.6, 0.25, 0.5])
+        chassis = cls._apply_submesh_color(trimesh.creation.box(extents=[1.2, 0.25, 0.6]), c_body)
+
+        cabin = cls._apply_submesh_color(trimesh.creation.box(extents=[0.6, 0.25, 0.5]), c_cabin)
         cabin.apply_translation([-0.05, 0.25, 0.0])
 
         wheels = []
         for wx in [-0.4, 0.4]:
             for wz in [-0.32, 0.32]:
-                wheel = trimesh.creation.cylinder(radius=0.16, height=0.08, sections=16)
+                wheel = cls._apply_submesh_color(trimesh.creation.cylinder(radius=0.16, height=0.08, sections=16), c_wheel)
                 R = trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0])
                 wheel.apply_transform(R)
                 wheel.apply_translation([wx, -0.1, wz])
@@ -88,19 +117,27 @@ class CategoryGeometryTemplates:
         return mesh
 
     @classmethod
-    def build_airplane(cls, scale: float = 0.9) -> trimesh.Trimesh:
+    def build_airplane(
+        cls,
+        scale: float = 0.9,
+        color_rgb: Optional[Tuple[int, int, int]] = None,
+        secondary_color_rgb: Optional[Tuple[int, int, int]] = None
+    ) -> trimesh.Trimesh:
         """Constructs a watertight 3D airplane: fuselage + wings + stabilizers."""
-        fuselage = trimesh.creation.cylinder(radius=0.15, height=1.6, sections=24)
+        c_body = color_rgb or (235, 235, 240)
+        c_trim = secondary_color_rgb or (37, 99, 235)
+
+        fuselage = cls._apply_submesh_color(trimesh.creation.cylinder(radius=0.15, height=1.6, sections=24), c_body)
         R_f = trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0])
         fuselage.apply_transform(R_f)
 
-        wings = trimesh.creation.box(extents=[0.3, 0.04, 1.8])
+        wings = cls._apply_submesh_color(trimesh.creation.box(extents=[0.3, 0.04, 1.8]), c_body)
         wings.apply_translation([0.1, 0.0, 0.0])
 
-        tail_v = trimesh.creation.box(extents=[0.2, 0.35, 0.04])
+        tail_v = cls._apply_submesh_color(trimesh.creation.box(extents=[0.2, 0.35, 0.04]), c_trim)
         tail_v.apply_translation([-0.65, 0.18, 0.0])
 
-        tail_h = trimesh.creation.box(extents=[0.15, 0.03, 0.6])
+        tail_h = cls._apply_submesh_color(trimesh.creation.box(extents=[0.15, 0.03, 0.6]), c_trim)
         tail_h.apply_translation([-0.65, 0.0, 0.0])
 
         mesh = trimesh.util.concatenate([fuselage, wings, tail_v, tail_h])
@@ -109,10 +146,16 @@ class CategoryGeometryTemplates:
         return mesh
 
     @classmethod
-    def build_cup(cls, scale: float = 0.9) -> trimesh.Trimesh:
+    def build_cup(
+        cls,
+        scale: float = 0.9,
+        color_rgb: Optional[Tuple[int, int, int]] = None,
+        secondary_color_rgb: Optional[Tuple[int, int, int]] = None
+    ) -> trimesh.Trimesh:
         """Constructs a watertight 3D drinking cup with side handle."""
-        outer = trimesh.creation.cylinder(radius=0.4, height=0.8, sections=24)
-        handle = trimesh.creation.torus(major_radius=0.25, minor_radius=0.05, major_sections=24, minor_sections=12)
+        c_glaze = color_rgb or (230, 235, 240)
+        outer = cls._apply_submesh_color(trimesh.creation.cylinder(radius=0.4, height=0.8, sections=24), c_glaze)
+        handle = cls._apply_submesh_color(trimesh.creation.torus(major_radius=0.25, minor_radius=0.05, major_sections=24, minor_sections=12), c_glaze)
         R = trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0])
         handle.apply_transform(R)
         handle.apply_translation([0.45, 0.0, 0.0])
@@ -123,16 +166,24 @@ class CategoryGeometryTemplates:
         return mesh
 
     @classmethod
-    def build_apple(cls, scale: float = 0.9) -> trimesh.Trimesh:
+    def build_apple(
+        cls,
+        scale: float = 0.9,
+        color_rgb: Optional[Tuple[int, int, int]] = None,
+        secondary_color_rgb: Optional[Tuple[int, int, int]] = None
+    ) -> trimesh.Trimesh:
         """Constructs a watertight organic apple: dimpled cardioid sphere + stem."""
-        sphere = trimesh.creation.icosphere(subdivisions=3, radius=0.45)
+        c_fruit = color_rgb or (215, 25, 35)
+        c_stem = secondary_color_rgb or (75, 45, 20)
+
+        sphere = cls._apply_submesh_color(trimesh.creation.icosphere(subdivisions=3, radius=0.45), c_fruit)
         v = sphere.vertices
         top_mask = v[:, 1] > 0.3
         v[top_mask, 1] -= 0.12 * (v[top_mask, 1] - 0.3) / 0.15
         bot_mask = v[:, 1] < -0.3
         v[bot_mask, 1] += 0.08 * (-v[bot_mask, 1] - 0.3) / 0.15
 
-        stem = trimesh.creation.cylinder(radius=0.025, height=0.25, sections=12)
+        stem = cls._apply_submesh_color(trimesh.creation.cylinder(radius=0.025, height=0.25, sections=12), c_stem)
         stem.apply_translation([0.02, 0.45, 0.0])
 
         mesh = trimesh.util.concatenate([sphere, stem])
@@ -141,24 +192,32 @@ class CategoryGeometryTemplates:
         return mesh
 
     @classmethod
-    def build_bicycle(cls, scale: float = 0.9) -> trimesh.Trimesh:
+    def build_bicycle(
+        cls,
+        scale: float = 0.9,
+        color_rgb: Optional[Tuple[int, int, int]] = None,
+        secondary_color_rgb: Optional[Tuple[int, int, int]] = None
+    ) -> trimesh.Trimesh:
         """Constructs a watertight 3D bicycle: wheels + tubular frame + saddle + handlebars."""
-        w_front = trimesh.creation.torus(major_radius=0.35, minor_radius=0.03, major_sections=24, minor_sections=12)
+        c_frame = color_rgb or (37, 99, 235)
+        c_parts = secondary_color_rgb or (35, 35, 40)
+
+        w_front = cls._apply_submesh_color(trimesh.creation.torus(major_radius=0.35, minor_radius=0.03, major_sections=24, minor_sections=12), c_parts)
         w_front.apply_translation([0.65, 0.0, 0.0])
 
-        w_rear = trimesh.creation.torus(major_radius=0.35, minor_radius=0.03, major_sections=24, minor_sections=12)
+        w_rear = cls._apply_submesh_color(trimesh.creation.torus(major_radius=0.35, minor_radius=0.03, major_sections=24, minor_sections=12), c_parts)
         w_rear.apply_translation([-0.65, 0.0, 0.0])
 
-        frame_tube = trimesh.creation.box(extents=[1.2, 0.05, 0.05])
+        frame_tube = cls._apply_submesh_color(trimesh.creation.box(extents=[1.2, 0.05, 0.05]), c_frame)
         frame_tube.apply_translation([0.0, 0.25, 0.0])
 
-        seat_post = trimesh.creation.cylinder(radius=0.03, height=0.6, sections=12)
+        seat_post = cls._apply_submesh_color(trimesh.creation.cylinder(radius=0.03, height=0.6, sections=12), c_parts)
         seat_post.apply_translation([-0.2, 0.3, 0.0])
 
-        seat = trimesh.creation.box(extents=[0.25, 0.05, 0.15])
+        seat = cls._apply_submesh_color(trimesh.creation.box(extents=[0.25, 0.05, 0.15]), c_parts)
         seat.apply_translation([-0.2, 0.6, 0.0])
 
-        handlebar = trimesh.creation.box(extents=[0.08, 0.05, 0.6])
+        handlebar = cls._apply_submesh_color(trimesh.creation.box(extents=[0.08, 0.05, 0.6]), c_parts)
         handlebar.apply_translation([0.45, 0.55, 0.0])
 
         mesh = trimesh.util.concatenate([w_front, w_rear, frame_tube, seat_post, seat, handlebar])
@@ -252,26 +311,29 @@ class CategoryGeometryTemplates:
         cls,
         category: str,
         binary_mask: Optional[np.ndarray] = None,
-        scale: float = 0.9
+        scale: float = 0.9,
+        color_rgb: Optional[Tuple[int, int, int]] = None,
+        secondary_color_rgb: Optional[Tuple[int, int, int]] = None
     ) -> trimesh.Trimesh:
         """
         Dispatches category-specific geometric generator.
+        Applies color_rgb and secondary_color_rgb if provided.
         Raises ValueError if category is unsupported.
         """
         cat = category.lower().strip() if category else ""
 
         if cat in ["chair", "bench", "stool"]:
-            return cls.build_chair(scale)
+            return cls.build_chair(scale, color_rgb, secondary_color_rgb)
         elif cat == "car":
-            return cls.build_car(scale)
+            return cls.build_car(scale, color_rgb, secondary_color_rgb)
         elif cat == "airplane":
-            return cls.build_airplane(scale)
+            return cls.build_airplane(scale, color_rgb, secondary_color_rgb)
         elif cat in ["cup", "coffee cup", "mug"]:
-            return cls.build_cup(scale)
+            return cls.build_cup(scale, color_rgb, secondary_color_rgb)
         elif cat == "apple":
-            return cls.build_apple(scale)
+            return cls.build_apple(scale, color_rgb, secondary_color_rgb)
         elif cat == "bicycle":
-            return cls.build_bicycle(scale)
+            return cls.build_bicycle(scale, color_rgb, secondary_color_rgb)
         elif cat == "table":
             return cls.build_table(scale)
         elif cat == "house":

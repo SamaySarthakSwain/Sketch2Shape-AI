@@ -100,11 +100,12 @@ class PipelineOrchestrator:
             # ---------------------------------------------------------
             # Stage 1: VALIDATING_INPUT
             # ---------------------------------------------------------
-            rec = record_stage_start(PipelineStage.VALIDATING_INPUT, "Validating input sketch format and accessibility")
+            rec = record_stage_start(PipelineStage.VALIDATING_INPUT, "Validating input sketch format or text prompt")
             validated_path = self.stage_executor.validate_input(
                 image_path=config.image_path,
                 image_b64=config.image_b64,
-                job_dir=job_dir
+                job_dir=job_dir,
+                prompt=getattr(config, "prompt", None)
             )
             record_stage_complete(rec, f"Input valid: {Path(validated_path).name}", artifacts={"input_sketch": validated_path})
 
@@ -115,7 +116,7 @@ class PipelineOrchestrator:
             processed_path, prep_report = self.stage_executor.execute_preprocessing(
                 input_image_path=validated_path,
                 job_dir=job_dir,
-                enabled=config.preprocess_first
+                enabled=config.preprocess_first and not bool(getattr(config, "prompt", None))
             )
             record_stage_complete(
                 rec,
@@ -125,19 +126,30 @@ class PipelineOrchestrator:
             )
 
             # ---------------------------------------------------------
-            # Stage 3: SKETCH_INTELLIGENCE
+            # Stage 3: SKETCH_INTELLIGENCE & COLOR REASONING
             # ---------------------------------------------------------
-            rec = record_stage_start(PipelineStage.SKETCH_INTELLIGENCE, "Predicting category & extracting geometric semantics")
+            rec = record_stage_start(PipelineStage.SKETCH_INTELLIGENCE, "Predicting object identity, semantics & extracting color palette")
             intelligence = self.stage_executor.execute_sketch_intelligence(
                 image_path=processed_path,
-                category_override=config.category_override
+                category_override=config.category_override,
+                prompt=getattr(config, "prompt", None)
             )
+            
+            # Apply explicit user color overrides if provided
+            if getattr(config, "primary_color_rgb", None):
+                intelligence["primary_color_rgb"] = config.primary_color_rgb
+                intelligence["is_colorful"] = True
+            if getattr(config, "secondary_color_rgb", None):
+                intelligence["secondary_color_rgb"] = config.secondary_color_rgb
+
             predicted_cat = intelligence.get("predicted_category", "chair")
+            predicted_obj = intelligence.get("predicted_object", predicted_cat)
             confidence = intelligence.get("top_confidence", 0.5)
             geo_tags = intelligence.get("geometric_tags", [])
+            color_status = f"Colors: {intelligence.get('primary_color_hex', 'N/A')}" if intelligence.get("is_colorful") else "Monochrome"
             record_stage_complete(
                 rec,
-                f"Classified as '{predicted_cat}' (confidence: {confidence:.2f})",
+                f"Predicted: '{predicted_obj}' ({predicted_cat}, conf: {confidence:.2f}) | {color_status}",
                 metadata={"intelligence": intelligence}
             )
 
@@ -251,7 +263,8 @@ class PipelineOrchestrator:
                         category=predicted_cat,
                         style=getattr(config, "visual_style", "realistic"),
                         material_override=getattr(config, "material_override", None),
-                        job_dir=job_dir
+                        job_dir=job_dir,
+                        color_palette=intelligence
                     )
                     tex_artifacts = {f"texture_{k}": v for k, v in tex_paths.items()}
                     record_stage_complete(

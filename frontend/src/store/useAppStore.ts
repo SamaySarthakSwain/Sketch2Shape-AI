@@ -20,6 +20,10 @@ interface AppState {
   currentImageName: string | null;
   setCurrentImage: (b64: string | null, name?: string | null) => void;
 
+  // Text-to-3D Prompt Mode
+  textPrompt: string;
+  setTextPrompt: (prompt: string) => void;
+
   // Sketch Intelligence
   intelligence: SketchIntelligenceResponse | null;
   isIntelligenceLoading: boolean;
@@ -132,6 +136,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   currentImageBase64: null,
   currentImageName: null,
+  textPrompt: '',
+  setTextPrompt: (prompt) => set({ textPrompt: prompt }),
   setCurrentImage: (b64, name = null) =>
     set({
       currentImageBase64: b64,
