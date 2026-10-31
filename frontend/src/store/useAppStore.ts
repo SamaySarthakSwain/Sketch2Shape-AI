@@ -131,7 +131,7 @@ function loadInitialHistory(): HistoryItem[] {
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  activeTab: 'home',
+  activeTab: 'workspace',
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   currentImageBase64: null,

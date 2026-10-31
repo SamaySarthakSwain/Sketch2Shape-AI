@@ -1,19 +1,16 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { PenTool, Eraser, RotateCcw, RotateCw, Trash2, ArrowRight, Palette } from 'lucide-react';
+import { RotateCcw, Trash2, Palette } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { Button } from '../common/Button';
 
 const PRESET_COLORS = [
-  { name: 'Ink Black', hex: '#000000' },
-  { name: 'Crimson Red', hex: '#DC2626' },
-  { name: 'Cobalt Blue', hex: '#2563EB' },
-  { name: 'Emerald Green', hex: '#059669' },
-  { name: 'Amber Gold', hex: '#D97706' },
-  { name: 'Royal Purple', hex: '#7C3AED' },
-  { name: 'Fiery Orange', hex: '#EA580C' },
-  { name: 'Teal Cyan', hex: '#0891B2' },
-  { name: 'Rose Pink', hex: '#EC4899' },
-  { name: 'Dark Slate', hex: '#334155' },
+  { name: 'Black', hex: '#000000' },
+  { name: 'Red', hex: '#DC2626' },
+  { name: 'Blue', hex: '#2563EB' },
+  { name: 'Green', hex: '#059669' },
+  { name: 'Gold', hex: '#D97706' },
+  { name: 'Purple', hex: '#7C3AED' },
+  { name: 'Orange', hex: '#EA580C' },
+  { name: 'Pink', hex: '#EC4899' },
 ];
 
 export const DrawingCanvas: React.FC = () => {
@@ -21,13 +18,11 @@ export const DrawingCanvas: React.FC = () => {
   const { setCurrentImage } = useAppStore();
 
   const [isDrawing, setIsDrawing] = useState(false);
-  const [brushSize, setBrushSize] = useState<number>(4);
   const [strokeColor, setStrokeColor] = useState<string>('#000000');
-  const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
-  // Initialize canvas with pure white background
+  // Initialize canvas with clean white background
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -44,6 +39,13 @@ export const DrawingCanvas: React.FC = () => {
     setHistoryIndex(0);
   }, []);
 
+  const syncImageToStore = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    setCurrentImage(dataUrl, 'sketch_drawing.png');
+  };
+
   const saveHistory = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -55,6 +57,7 @@ export const DrawingCanvas: React.FC = () => {
     newHistory.push(currentData);
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
+    syncImageToStore();
   };
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -83,8 +86,8 @@ export const DrawingCanvas: React.FC = () => {
     const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
     const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
 
-    ctx.lineWidth = brushSize;
-    ctx.strokeStyle = tool === 'pen' ? strokeColor : '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = strokeColor;
     ctx.lineTo(x, y);
     ctx.stroke();
   };
@@ -105,18 +108,7 @@ export const DrawingCanvas: React.FC = () => {
       const prev = history[historyIndex - 1];
       ctx.putImageData(prev, 0, 0);
       setHistoryIndex(historyIndex - 1);
-    }
-  };
-
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      const next = history[historyIndex + 1];
-      ctx.putImageData(next, 0, 0);
-      setHistoryIndex(historyIndex + 1);
+      syncImageToStore();
     }
   };
 
@@ -128,141 +120,70 @@ export const DrawingCanvas: React.FC = () => {
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    saveHistory();
-  };
-
-  const handleUseDrawing = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dataUrl = canvas.toDataURL('image/png');
-    setCurrentImage(dataUrl, 'interactive_drawing.png');
+    const initial = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setHistory([initial]);
+    setHistoryIndex(0);
+    setCurrentImage(null, null);
   };
 
   return (
     <div className="space-y-3">
-      {/* Canvas Toolset */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 text-xs">
-        <div className="flex items-center gap-1">
-          <Button
-            variant={tool === 'pen' ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => setTool('pen')}
-            icon={<PenTool className="w-3.5 h-3.5" />}
-          >
-            Pen
-          </Button>
-          <Button
-            variant={tool === 'eraser' ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => setTool('eraser')}
-            icon={<Eraser className="w-3.5 h-3.5" />}
-          >
-            Eraser
-          </Button>
-        </div>
-
-        {/* Brush Size */}
-        <div className="flex items-center gap-2 px-2 border-l border-slate-800">
-          <span className="text-slate-400">Size:</span>
-          {[2, 4, 8, 14].map((size) => (
-            <button
-              key={size}
-              onClick={() => setBrushSize(size)}
-              className={`w-6 h-6 rounded flex items-center justify-center font-mono ${
-                brushSize === size
-                  ? 'bg-blue-600 text-white font-bold'
-                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {size}
-            </button>
-          ))}
-        </div>
-
-        {/* Undo / Redo / Clear */}
-        <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={historyIndex <= 0}
-            onClick={handleUndo}
-            icon={<RotateCcw className="w-3.5 h-3.5" />}
-            title="Undo"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={historyIndex >= history.length - 1}
-            onClick={handleRedo}
-            icon={<RotateCw className="w-3.5 h-3.5" />}
-            title="Redo"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClear}
-            className="text-rose-400 hover:text-rose-300"
-            icon={<Trash2 className="w-3.5 h-3.5" />}
-            title="Clear Canvas"
-          />
-        </div>
-      </div>
-
-      {/* Vibrant Color Palette Selector */}
-      <div className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs space-y-2">
-        <div className="flex items-center justify-between text-slate-300">
-          <div className="flex items-center gap-1.5 font-medium">
-            <Palette className="w-3.5 h-3.5 text-blue-400" />
-            <span>Stroke Color:</span>
-            <span
-              className="inline-block w-3.5 h-3.5 rounded-full border border-slate-700 shadow-sm ml-1"
-              style={{ backgroundColor: strokeColor }}
-            />
-            <span className="font-mono text-slate-400 text-[11px] uppercase">{strokeColor}</span>
-          </div>
-          <span className="text-[11px] text-slate-400">AI textures 3D model to these colors</span>
-        </div>
-
-        <div className="flex items-center flex-wrap gap-2">
+      {/* Sleek Tool & Color Bar */}
+      <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+        {/* Colors */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           {PRESET_COLORS.map((c) => (
             <button
               key={c.hex}
               title={c.name}
-              onClick={() => {
-                setStrokeColor(c.hex);
-                setTool('pen');
-              }}
-              className={`w-6 h-6 rounded-full transition-transform border ${
-                strokeColor.toLowerCase() === c.hex.toLowerCase() && tool === 'pen'
+              onClick={() => setStrokeColor(c.hex)}
+              className={`w-6 h-6 rounded-full transition-all border ${
+                strokeColor.toLowerCase() === c.hex.toLowerCase()
                   ? 'ring-2 ring-blue-500 scale-110 border-white'
-                  : 'border-slate-700 hover:scale-105'
+                  : 'border-slate-700/60 hover:scale-105'
               }`}
               style={{ backgroundColor: c.hex }}
             />
           ))}
 
-          {/* Custom Color Input */}
-          <label className="flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer ml-auto bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded border border-slate-700 transition-colors">
-            <span>Custom:</span>
+          {/* Color Picker */}
+          <label className="flex items-center cursor-pointer p-0.5 rounded-full hover:bg-slate-800 transition-colors" title="Custom Color">
+            <Palette className="w-4 h-4 text-slate-400 hover:text-slate-200" />
             <input
               type="color"
               value={strokeColor}
-              onChange={(e) => {
-                setStrokeColor(e.target.value);
-                setTool('pen');
-              }}
-              className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
+              onChange={(e) => setStrokeColor(e.target.value)}
+              className="w-0 h-0 opacity-0 absolute pointer-events-none"
             />
           </label>
         </div>
+
+        {/* Undo & Clear */}
+        <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
+          <button
+            onClick={handleUndo}
+            disabled={historyIndex <= 0}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            title="Undo"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={handleClear}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+            title="Clear Canvas"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Drawing Surface */}
-      <div className="flex justify-center bg-slate-950 p-2 rounded-xl border border-slate-800 shadow-inner">
+      {/* Canvas */}
+      <div className="flex justify-center bg-white rounded-xl overflow-hidden border border-slate-800 shadow-md">
         <canvas
           ref={canvasRef}
-          width={400}
-          height={400}
+          width={360}
+          height={320}
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}
@@ -270,18 +191,8 @@ export const DrawingCanvas: React.FC = () => {
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
-          className="bg-white rounded-lg cursor-crosshair shadow-sm touch-none max-w-full h-auto"
+          className="cursor-crosshair touch-none w-full max-w-[360px] h-[320px]"
         />
-      </div>
-
-      <div className="flex justify-end">
-        <Button
-          variant="primary"
-          onClick={handleUseDrawing}
-          icon={<ArrowRight className="w-4 h-4" />}
-        >
-          Use Drawing in Studio
-        </Button>
       </div>
     </div>
   );

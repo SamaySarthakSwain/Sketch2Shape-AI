@@ -1,15 +1,14 @@
 import React, { useRef, useState } from 'react';
-import { Upload, X, RefreshCw, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Upload, X, ImageIcon } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { Button } from '../common/Button';
 
 const SAMPLE_SKETCHES = [
-  { name: 'Chair', file: '/examples/quickdraw_chair_normalized.png', category: 'chair' },
-  { name: 'Car', file: '/examples/quickdraw_car_normalized.png', category: 'car' },
-  { name: 'Airplane', file: '/examples/quickdraw_airplane_normalized.png', category: 'airplane' },
-  { name: 'Cup', file: '/examples/quickdraw_cup_normalized.png', category: 'cup' },
-  { name: 'Bicycle', file: '/examples/quickdraw_bicycle_normalized.png', category: 'bicycle' },
-  { name: 'Apple', file: '/examples/quickdraw_apple_normalized.png', category: 'apple' },
+  { name: 'Car', icon: '🚗', file: '/examples/quickdraw_car_normalized.png' },
+  { name: 'Chair', icon: '🪑', file: '/examples/quickdraw_chair_normalized.png' },
+  { name: 'Cup', icon: '☕', file: '/examples/quickdraw_cup_normalized.png' },
+  { name: 'Apple', icon: '🍎', file: '/examples/quickdraw_apple_normalized.png' },
+  { name: 'Bicycle', icon: '🚲', file: '/examples/quickdraw_bicycle_normalized.png' },
+  { name: 'Airplane', icon: '✈️', file: '/examples/quickdraw_airplane_normalized.png' },
 ];
 
 export const UploadPanel: React.FC = () => {
@@ -22,11 +21,11 @@ export const UploadPanel: React.FC = () => {
     setErrorMsg(null);
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      setErrorMsg('Unsupported format. Please upload PNG, JPG, or WebP.');
+      setErrorMsg('Please upload PNG, JPG, or WebP.');
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setErrorMsg('Image size exceeds 10MB limit.');
+      setErrorMsg('Image size exceeds 10MB.');
       return;
     }
 
@@ -35,27 +34,7 @@ export const UploadPanel: React.FC = () => {
       const b64 = e.target?.result as string;
       setCurrentImage(b64, file.name);
     };
-    reader.onerror = () => {
-      setErrorMsg('Failed to read image file.');
-    };
     reader.readAsDataURL(file);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
-    }
   };
 
   const loadSample = async (sample: typeof SAMPLE_SKETCHES[0]) => {
@@ -64,26 +43,32 @@ export const UploadPanel: React.FC = () => {
       const blob = await res.blob();
       const reader = new FileReader();
       reader.onload = () => {
-        setCurrentImage(reader.result as string, `${sample.name}_sample.png`);
+        setCurrentImage(reader.result as string, `${sample.name}.png`);
       };
       reader.readAsDataURL(blob);
-    } catch (e) {
-      setErrorMsg(`Failed to load ${sample.name} sample.`);
+    } catch {
+      setErrorMsg(`Failed to load ${sample.name}`);
     }
   };
 
   return (
-    <div className="space-y-4">
-      {/* Upload Zone / Active Preview */}
+    <div className="space-y-3">
       {!currentImageBase64 ? (
         <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0]);
+          }}
           onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all ${
+          className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all ${
             isDragging
-              ? 'border-blue-500 bg-blue-950/20 text-blue-200 scale-[0.99]'
+              ? 'border-blue-500 bg-blue-950/20 text-blue-200'
               : 'border-slate-800 hover:border-slate-700 bg-slate-900/40 text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -93,61 +78,36 @@ export const UploadPanel: React.FC = () => {
             accept="image/png,image/jpeg,image/webp"
             className="hidden"
             onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                processFile(e.target.files[0]);
-              }
+              if (e.target.files?.[0]) processFile(e.target.files[0]);
             }}
           />
-          <div className="w-12 h-12 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 mb-3 shadow-inner">
-            <Upload className="w-5 h-5 text-blue-400" />
+          <div className="w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-blue-400 mb-2">
+            <Upload className="w-5 h-5" />
           </div>
-          <span className="text-sm font-medium text-slate-200 text-center">
-            Drop your hand-drawn sketch here, or <span className="text-blue-400 underline">browse</span>
+          <span className="text-xs font-medium text-slate-200">
+            Click to upload, or drag and drop
           </span>
-          <span className="text-xs text-slate-500 mt-1">Supports PNG, JPG, JPEG, WebP (up to 10MB)</span>
+          <span className="text-[11px] text-slate-500 mt-0.5">PNG, JPG, or WebP</span>
         </div>
       ) : (
-        <div className="relative border border-slate-800 rounded-xl bg-slate-950/80 overflow-hidden p-3">
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-xs">
+        <div className="relative border border-slate-800 rounded-xl bg-slate-950/80 p-3">
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-xs">
             <span className="text-slate-300 font-medium truncate max-w-[200px] flex items-center gap-1.5">
               <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
-              {currentImageName || 'Loaded Sketch'}
+              {currentImageName || 'Sketch Preview'}
             </span>
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                icon={<RefreshCw className="w-3 h-3" />}
-              >
-                Replace
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentImage(null)}
-                className="text-rose-400 hover:text-rose-300"
-                icon={<X className="w-3 h-3" />}
-              >
-                Remove
-              </Button>
-            </div>
+            <button
+              onClick={() => setCurrentImage(null, null)}
+              className="text-slate-400 hover:text-rose-400 p-1 rounded-md transition-colors"
+              title="Remove"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                processFile(e.target.files[0]);
-              }
-            }}
-          />
-          <div className="h-48 w-full bg-slate-900 rounded-lg flex items-center justify-center p-2 border border-slate-800/50">
+          <div className="h-44 w-full bg-slate-900/60 rounded-lg flex items-center justify-center p-2 border border-slate-800/50">
             <img
               src={currentImageBase64}
-              alt="Active Sketch Preview"
+              alt="Sketch Preview"
               className="max-h-full max-w-full object-contain rounded"
             />
           </div>
@@ -155,35 +115,26 @@ export const UploadPanel: React.FC = () => {
       )}
 
       {errorMsg && (
-        <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/50 rounded-lg p-2.5">
+        <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/50 rounded-lg p-2">
           {errorMsg}
         </p>
       )}
 
-      {/* Preset Sketch Library */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles className="w-3 h-3 text-blue-400" />
-            Verified Sample Sketches
-          </span>
-          <span className="text-[11px] text-slate-500">Quick, Draw! & TU-Berlin</span>
-        </div>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+      {/* Quick Test Samples */}
+      <div className="pt-1">
+        <span className="text-[11px] font-medium text-slate-400 block mb-1.5">
+          Or try a sample sketch:
+        </span>
+        <div className="grid grid-cols-6 gap-1.5">
           {SAMPLE_SKETCHES.map((sample) => (
             <button
               key={sample.name}
               onClick={() => loadSample(sample)}
-              className="group border border-slate-800/80 hover:border-blue-500/50 bg-slate-900/60 hover:bg-slate-800/60 rounded-lg p-2 text-center transition-all flex flex-col items-center gap-1.5 focus:outline-none"
+              className="border border-slate-800 hover:border-blue-500/50 bg-slate-900/60 hover:bg-slate-800/80 rounded-lg py-1.5 px-1 text-center transition-all flex flex-col items-center gap-1 group"
+              title={sample.name}
             >
-              <div className="w-12 h-12 bg-white rounded flex items-center justify-center p-1 overflow-hidden shadow-sm">
-                <img
-                  src={sample.file}
-                  alt={sample.name}
-                  className="max-h-full max-w-full object-contain"
-                />
-              </div>
-              <span className="text-[11px] font-medium text-slate-300 group-hover:text-blue-300">
+              <span className="text-base group-hover:scale-110 transition-transform">{sample.icon}</span>
+              <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate w-full">
                 {sample.name}
               </span>
             </button>
