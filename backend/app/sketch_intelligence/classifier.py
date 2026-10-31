@@ -201,8 +201,11 @@ class SketchIntelligenceEngine:
             geometry_metrics=geometry_metrics
         )
 
-        # Append visual color description if colorful
         desc = semantic_info["semantic_description"]
+        if ai_vision_info and ai_vision_info.get("shape_3d_description"):
+            desc = f"{ai_vision_info['shape_3d_description']}. " + desc
+
+        # Append visual color description if colorful
         if is_colorful and primary_color_hex:
             desc += f" Dominant color palette: {primary_color_hex} with accent {secondary_color_hex}."
 
@@ -218,6 +221,11 @@ class SketchIntelligenceEngine:
         conditioning["primary_color_rgb"] = primary_color_rgb
         conditioning["primary_color_hex"] = primary_color_hex
         conditioning["secondary_color_rgb"] = secondary_color_rgb
+        conditioning["secondary_color_hex"] = secondary_color_hex
+        if ai_vision_info and ai_vision_info.get("prompt_3d"):
+            conditioning["prompt_3d"] = ai_vision_info["prompt_3d"]
+        if ai_vision_info and ai_vision_info.get("shape_3d_description"):
+            conditioning["shape_3d_description"] = ai_vision_info["shape_3d_description"]
         conditioning["secondary_color_hex"] = secondary_color_hex
 
         elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)

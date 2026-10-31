@@ -6,7 +6,7 @@ Provides /api/v1/intelligence/analyze and /api/v1/intelligence/health endpoints.
 import time
 import base64
 from typing import Optional
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Request
 from pydantic import BaseModel
 
 from app.sketch_intelligence.classifier import SketchIntelligenceEngine
@@ -51,33 +51,48 @@ async def health_check():
 
 
 @router.post("/analyze")
-async def analyze_sketch(
-    file: Optional[UploadFile] = File(None),
-    image_base64: Optional[str] = Form(None),
-    bypass_preprocessing: bool = Form(False)
-):
+async def analyze_sketch(request: Request):
     """
-    Analyzes an input sketch image (via multipart file or base64), runs semantic
-    classification, uncertainty estimation, geometric tagging, and produces
+    Analyzes an input sketch image (via JSON payload, multipart file, or base64 form field),
+    runs semantic classification, uncertainty estimation, geometric tagging, and produces
     3D reconstruction conditioning payloads.
     """
-    eng = get_engine()
-
+    content_type = request.headers.get("content-type", "")
     image_bytes = None
-    if file is not None:
-        image_bytes = await file.read()
-    elif image_base64 is not None:
-        if "," in image_base64:
-            image_base64 = image_base64.split(",")[1]
-        try:
-            image_bytes = base64.b64decode(image_base64)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid base64 encoding: {e}")
-    else:
-        raise HTTPException(status_code=400, detail="Must provide either multipart file or image_base64.")
+    bypass = False
 
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            raw_b64 = body.get("image_base64")
+            bypass = bool(body.get("bypass_preprocessing", False))
+            if raw_b64:
+                if "," in raw_b64:
+                    raw_b64 = raw_b64.split(",")[1]
+                image_bytes = base64.b64decode(raw_b64)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to parse JSON body: {e}")
+    else:
+        try:
+            form = await request.form()
+            bypass_str = form.get("bypass_preprocessing", "false")
+            bypass = str(bypass_str).lower() in ("true", "1")
+            if "file" in form and hasattr(form["file"], "read"):
+                image_bytes = await form["file"].read()
+            elif "image_base64" in form:
+                raw_b64 = str(form["image_base64"])
+                if "," in raw_b64:
+                    raw_b64 = raw_b64.split(",")[1]
+                image_bytes = base64.b64decode(raw_b64)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to parse form data: {e}")
+
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Must provide either JSON payload, multipart file, or image_base64.")
+
+    eng = get_engine()
     try:
-        results = eng.analyze(image_bytes, bypass_preprocessing=bypass_preprocessing)
+        results = eng.analyze(image_bytes, bypass_preprocessing=bypass)
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")

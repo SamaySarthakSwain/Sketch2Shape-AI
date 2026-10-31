@@ -60,6 +60,7 @@ export const Workspace: React.FC = () => {
       let primaryHex: string | undefined = undefined;
       let secondaryHex: string | undefined = undefined;
       let objectLabel = '3D Asset';
+      let aiPrompt: string | undefined = undefined;
 
       // 1. Analyze Sketch / Prompt for object type & colors
       if (hasPrompt && !hasSketch) {
@@ -71,6 +72,7 @@ export const Workspace: React.FC = () => {
         primaryHex = pRes.primary_color_hex;
         secondaryHex = pRes.secondary_color_hex;
         objectLabel = pRes.predicted_object || pRes.category || 'Object';
+        aiPrompt = pRes.prompt_3d;
       } else if (hasSketch) {
         setStatusMessage(
           preprocessFirst
@@ -83,7 +85,8 @@ export const Workspace: React.FC = () => {
         secondaryRgb = intel.secondary_color_rgb;
         primaryHex = intel.primary_color_hex;
         secondaryHex = intel.secondary_color_hex;
-        objectLabel = intel.predicted_category || 'Object';
+        objectLabel = intel.predicted_object || intel.predicted_category || 'Object';
+        aiPrompt = intel.prompt_3d;
 
         // If optional prompt also provided, merge prompt colors/attributes
         if (hasPrompt) {
@@ -99,6 +102,7 @@ export const Workspace: React.FC = () => {
               secondaryHex = pRes.secondary_color_hex;
             }
             if (pRes.predicted_object) objectLabel = pRes.predicted_object;
+            if (pRes.prompt_3d) aiPrompt = pRes.prompt_3d;
           } catch {
             // Fallback to sketch semantics
           }
@@ -133,6 +137,8 @@ export const Workspace: React.FC = () => {
       }
       if (hasPrompt) {
         payload.prompt = textPrompt;
+      } else if (aiPrompt) {
+        payload.prompt = aiPrompt;
       }
       if (primaryRgb) payload.primary_color_rgb = primaryRgb;
       if (secondaryRgb) payload.secondary_color_rgb = secondaryRgb;

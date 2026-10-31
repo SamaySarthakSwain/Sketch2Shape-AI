@@ -88,6 +88,57 @@ class GeminiVisionAnalyzer:
 
         return self._fallback_prompt_analysis(prompt_text)
 
+    GEMINI_MODELS = [
+        "gemini-flash-lite-latest",
+        "gemini-3.5-flash-lite",
+        "gemini-3-flash-preview",
+        "gemini-flash-latest",
+        "gemini-2.5-flash"
+    ]
+
+    @staticmethod
+    def _parse_rgb(val: Any, default: List[int]) -> List[int]:
+        """Safely parses RGB from array [r,g,b], comma string 'r,g,b', or hex '#RRGGBB'."""
+        if isinstance(val, (list, tuple)) and len(val) >= 3:
+            try:
+                return [int(val[0]), int(val[1]), int(val[2])]
+            except (ValueError, TypeError):
+                pass
+        if isinstance(val, str):
+            val = val.strip()
+            if val.startswith("#") and len(val) in (4, 7):
+                hex_str = val.lstrip("#")
+                if len(hex_str) == 3:
+                    hex_str = "".join([c * 2 for c in hex_str])
+                try:
+                    return [int(hex_str[i : i + 2], 16) for i in (0, 2, 4)]
+                except ValueError:
+                    pass
+            if "," in val:
+                parts = [p.strip() for p in val.split(",")]
+                if len(parts) >= 3:
+                    try:
+                        return [int(parts[0]), int(parts[1]), int(parts[2])]
+                    except ValueError:
+                        pass
+        return default
+
+    @staticmethod
+    def _extract_json(text: str) -> Any:
+        """Robustly extracts JSON from LLM text output (handling markdown ticks)."""
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+        data = json.loads(text)
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0]
+        return data
+
     # ------------------------------------------------------------------
     # Gemini Multimodal Vision API Call
     # ------------------------------------------------------------------
@@ -97,19 +148,18 @@ class GeminiVisionAnalyzer:
         mime_type: str,
         local_colors: Dict[str, Any]
     ) -> Dict[str, Any]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.api_key}"
-
         system_instruction = (
             "You are the Sketch Intelligence & Semantic Vision Engine for Sketch2Shape AI.\n"
             "Your task is to analyze 2D hand-drawn sketches, digital artwork, or photos.\n"
             "1. PREDICT THE OBJECT: Identify what object is drawn (e.g. sports car, dining chair, jet, coffee mug, red apple, mountain bike).\n"
             "2. CATEGORIZE: Map it to the closest canonical 3D category (one of: chair, car, airplane, bicycle, cup, apple, table, vase, bottle, tree, house, sword, or generic_object).\n"
-            "3. COLOR ANALYSIS:\n"
+            "3. 3D SHAPE AND GEOMETRIC STRUCTURE: Comprehensive description of 3D volume, shape, symmetry, components, proportions, and structure.\n"
+            "4. COLOR ANALYSIS:\n"
             "   - Determine if the drawing/image is colorful (contains colored strokes, fills, or hues beyond simple black/grey lines on white paper).\n"
             "   - If colorful, identify the exact primary color (name, RGB [0..255], and hex #RRGGBB) and secondary color.\n"
             "   - List dominant colors in the object.\n"
-            "4. 3D RECONSTRUCTION PROMPT: Write a vivid, detailed prompt embedding the exact geometry, visual style, and colors for 3D generation.\n"
-            "Respond in strict JSON with no markdown wrapping."
+            "5. 3D RECONSTRUCTION PROMPT: Write a vivid, detailed prompt embedding the exact geometry, visual style, and colors for 3D generation.\n"
+            "Respond in strict JSON with keys: predicted_object, category, confidence, shape_3d_description, is_colorful, primary_color_hex, primary_color_rgb, secondary_color_hex, secondary_color_rgb, dominant_colors, visual_style, prompt_3d."
         )
 
         prompt_payload = {
@@ -125,65 +175,73 @@ class GeminiVisionAnalyzer:
             }
         }
 
-        resp = requests.post(url, json=prompt_payload, timeout=20)
-        if resp.status_code != 200:
-            raise RuntimeError(f"Gemini API returned status {resp.status_code}: {resp.text}")
+        last_error = None
+        for model_name in self.GEMINI_MODELS:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
+            try:
+                resp = requests.post(url, json=prompt_payload, timeout=25)
+                if resp.status_code == 200:
+                    resp_json = resp.json()
+                    candidates = resp_json.get("candidates", [])
+                    if candidates:
+                        raw_text = candidates[0]["content"]["parts"][0]["text"].strip()
+                        data = self._extract_json(raw_text)
 
-        resp_json = resp.json()
-        candidates = resp_json.get("candidates", [])
-        if not candidates:
-            raise RuntimeError("No generation candidate returned by Gemini")
+                        # Parse color fields robustly
+                        data["is_colorful"] = bool(data.get("is_colorful", False))
+                        data["primary_color_rgb"] = self._parse_rgb(
+                            data.get("primary_color_rgb"),
+                            local_colors.get("primary_color_rgb", [30, 30, 35])
+                        )
+                        data["secondary_color_rgb"] = self._parse_rgb(
+                            data.get("secondary_color_rgb"),
+                            local_colors.get("secondary_color_rgb", [240, 240, 245])
+                        )
 
-        text_content = candidates[0]["content"]["parts"][0]["text"].strip()
-        data = json.loads(text_content)
+                        # Merge local color verification if local OpenCV detected distinct colors
+                        if not data["is_colorful"] and local_colors.get("is_colorful"):
+                            data["is_colorful"] = True
+                            data["primary_color_rgb"] = local_colors["primary_color_rgb"]
+                            data["primary_color_hex"] = local_colors["primary_color_hex"]
+                            data["secondary_color_rgb"] = local_colors["secondary_color_rgb"]
+                            data["secondary_color_hex"] = local_colors["secondary_color_hex"]
+                            data["dominant_colors"] = local_colors["dominant_colors"]
 
-        # Ensure boolean for is_colorful
-        data["is_colorful"] = bool(data.get("is_colorful", False))
+                        # Ensure canonical category is valid
+                        cat = str(data.get("category", "")).lower().strip()
+                        cat = self._normalize_category(cat, data.get("predicted_object", ""))
+                        data["category"] = cat
 
-        # Merge local color verification if Gemini didn't find color but local OpenCV did
-        if not data["is_colorful"] and local_colors.get("is_colorful"):
-            data["is_colorful"] = True
-            data["primary_color_rgb"] = local_colors["primary_color_rgb"]
-            data["primary_color_hex"] = local_colors["primary_color_hex"]
-            data["secondary_color_rgb"] = local_colors["secondary_color_rgb"]
-            data["secondary_color_hex"] = local_colors["secondary_color_hex"]
-            data["dominant_colors"] = local_colors["dominant_colors"]
-        elif not data["is_colorful"]:
-            # Populate default colors
-            data["primary_color_rgb"] = data.get("primary_color_rgb") or local_colors.get("primary_color_rgb", [30, 30, 35])
-            data["primary_color_hex"] = data.get("primary_color_hex") or local_colors.get("primary_color_hex", "#1E1E23")
-            data["secondary_color_rgb"] = data.get("secondary_color_rgb") or local_colors.get("secondary_color_rgb", [240, 240, 245])
-            data["secondary_color_hex"] = data.get("secondary_color_hex") or local_colors.get("secondary_color_hex", "#F0F0F5")
-            data["dominant_colors"] = data.get("dominant_colors") or local_colors.get("dominant_colors", [])
+                        data["ai_model_used"] = model_name
+                        data["success"] = True
+                        print(f"[GeminiVisionAnalyzer] Vision analysis succeeded using {model_name}: {data.get('predicted_object')} ({cat})")
+                        return data
+                else:
+                    last_error = f"{model_name} returned status {resp.status_code}: {resp.text[:150]}"
+            except Exception as e:
+                last_error = f"{model_name} error: {e}"
+                continue
 
-        # Ensure canonical category is valid
-        cat = str(data.get("category", "")).lower().strip()
-        cat = self._normalize_category(cat, data.get("predicted_object", ""))
-        data["category"] = cat
-
-        data["ai_model_used"] = "gemini-2.5-flash"
-        data["success"] = True
-        return data
+        raise RuntimeError(f"All Gemini models exhausted. Last error: {last_error}")
 
     # ------------------------------------------------------------------
     # Gemini Text Prompt Analysis (for Text-to-3D)
     # ------------------------------------------------------------------
     def _call_gemini_prompt(self, prompt_text: str) -> Dict[str, Any]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.api_key}"
-
         instruction = (
             f"Analyze this prompt for 3D asset generation: '{prompt_text}'\n"
             "Determine:\n"
             "1. predicted_object: concise name of the object\n"
             "2. category: canonical class (one of: chair, car, airplane, bicycle, cup, apple, table, vase, bottle, tree, house, sword, or generic_object)\n"
-            "3. is_colorful: true if prompt specifies or implies colors (e.g. red, blue, green, golden)\n"
-            "4. dominant_colors: list of {name: str, hex: str, rgb: [r, g, b]}\n"
-            "5. primary_color_hex: hex code of main color\n"
-            "6. primary_color_rgb: [r, g, b] array\n"
-            "7. secondary_color_hex: hex code of accent color\n"
-            "8. secondary_color_rgb: [r, g, b] array\n"
-            "9. visual_style: realistic, futuristic, metallic, ceramic, cartoon, etc.\n"
-            "10. prompt_3d: comprehensive detailed description for 3D mesh generator\n"
+            "3. shape_3d_description: 3D geometric structure and symmetry\n"
+            "4. is_colorful: true if prompt specifies or implies colors (e.g. red, blue, green, golden)\n"
+            "5. dominant_colors: list of {name: str, hex: str, rgb: [r, g, b]}\n"
+            "6. primary_color_hex: hex code of main color\n"
+            "7. primary_color_rgb: [r, g, b] array\n"
+            "8. secondary_color_hex: hex code of accent color\n"
+            "9. secondary_color_rgb: [r, g, b] array\n"
+            "10. visual_style: realistic, futuristic, metallic, ceramic, cartoon, etc.\n"
+            "11. prompt_3d: comprehensive detailed description for 3D mesh generator\n"
             "Respond in strict JSON with no markdown wrapping."
         )
 
@@ -195,15 +253,27 @@ class GeminiVisionAnalyzer:
             }
         }
 
-        resp = requests.post(url, json=payload, timeout=15)
-        if resp.status_code == 200:
-            content = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-            data = json.loads(content)
-            data["category"] = self._normalize_category(data.get("category", ""), data.get("predicted_object", ""))
-            data["ai_model_used"] = "gemini-2.5-flash"
-            data["success"] = True
-            return data
+        last_error = None
+        for model_name in self.GEMINI_MODELS:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
+            try:
+                resp = requests.post(url, json=payload, timeout=20)
+                if resp.status_code == 200:
+                    raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    data = self._extract_json(raw_text)
+                    data["category"] = self._normalize_category(data.get("category", ""), data.get("predicted_object", ""))
+                    data["primary_color_rgb"] = self._parse_rgb(data.get("primary_color_rgb"), [220, 38, 38])
+                    data["secondary_color_rgb"] = self._parse_rgb(data.get("secondary_color_rgb"), [30, 41, 59])
+                    data["ai_model_used"] = model_name
+                    data["success"] = True
+                    return data
+                else:
+                    last_error = f"{model_name} returned status {resp.status_code}"
+            except Exception as e:
+                last_error = f"{model_name} error: {e}"
+                continue
 
+        print(f"[GeminiVisionAnalyzer] Prompt analysis warning: {last_error}")
         return self._fallback_prompt_analysis(prompt_text)
 
     # ------------------------------------------------------------------
