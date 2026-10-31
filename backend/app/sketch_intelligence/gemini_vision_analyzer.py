@@ -92,7 +92,6 @@ class GeminiVisionAnalyzer:
         "gemini-flash-lite-latest",
         "gemini-3.5-flash-lite",
         "gemini-3-flash-preview",
-        "gemini-flash-latest",
         "gemini-2.5-flash"
     ]
 
@@ -179,7 +178,7 @@ class GeminiVisionAnalyzer:
         for model_name in self.GEMINI_MODELS:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
             try:
-                resp = requests.post(url, json=prompt_payload, timeout=25)
+                resp = requests.post(url, json=prompt_payload, timeout=8)
                 if resp.status_code == 200:
                     resp_json = resp.json()
                     candidates = resp_json.get("candidates", [])
@@ -257,7 +256,7 @@ class GeminiVisionAnalyzer:
         for model_name in self.GEMINI_MODELS:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
             try:
-                resp = requests.post(url, json=payload, timeout=20)
+                resp = requests.post(url, json=payload, timeout=8)
                 if resp.status_code == 200:
                     raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                     data = self._extract_json(raw_text)

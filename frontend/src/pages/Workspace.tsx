@@ -65,28 +65,38 @@ export const Workspace: React.FC = () => {
       // 1. Analyze Sketch / Prompt for object type & colors
       if (hasPrompt && !hasSketch) {
         setStatusMessage('Analyzing prompt characteristics with AI...');
-        const pRes = await analyzePrompt(textPrompt);
-        category = pRes.category;
-        primaryRgb = pRes.primary_color_rgb;
-        secondaryRgb = pRes.secondary_color_rgb;
-        primaryHex = pRes.primary_color_hex;
-        secondaryHex = pRes.secondary_color_hex;
-        objectLabel = pRes.predicted_object || pRes.category || 'Object';
-        aiPrompt = pRes.prompt_3d;
+        try {
+          const pRes = await analyzePrompt(textPrompt);
+          category = pRes.category;
+          primaryRgb = pRes.primary_color_rgb;
+          secondaryRgb = pRes.secondary_color_rgb;
+          primaryHex = pRes.primary_color_hex;
+          secondaryHex = pRes.secondary_color_hex;
+          objectLabel = pRes.predicted_object || pRes.category || textPrompt.slice(0, 20);
+          aiPrompt = pRes.prompt_3d;
+        } catch (pErr) {
+          console.warn('Prompt analysis notice, continuing with direct 3D generation:', pErr);
+          objectLabel = textPrompt.slice(0, 20);
+        }
       } else if (hasSketch) {
         setStatusMessage(
           preprocessFirst
             ? 'Preprocessing sketch (resizing, contrast, noise reduction)...'
             : 'Analyzing sketch visual concept...'
         );
-        const intel = await analyzeSketch(currentImageBase64!);
-        category = intel.predicted_category;
-        primaryRgb = intel.primary_color_rgb;
-        secondaryRgb = intel.secondary_color_rgb;
-        primaryHex = intel.primary_color_hex;
-        secondaryHex = intel.secondary_color_hex;
-        objectLabel = intel.predicted_object || intel.predicted_category || 'Object';
-        aiPrompt = intel.prompt_3d;
+        try {
+          const intel = await analyzeSketch(currentImageBase64!);
+          category = intel.predicted_category;
+          primaryRgb = intel.primary_color_rgb;
+          secondaryRgb = intel.secondary_color_rgb;
+          primaryHex = intel.primary_color_hex;
+          secondaryHex = intel.secondary_color_hex;
+          objectLabel = intel.predicted_object || intel.predicted_category || 'Object';
+          aiPrompt = intel.prompt_3d;
+        } catch (visionErr) {
+          console.warn('Sketch vision analysis notice, continuing with pipeline:', visionErr);
+          objectLabel = '3D Model';
+        }
 
         // If optional prompt also provided, merge prompt colors/attributes
         if (hasPrompt) {

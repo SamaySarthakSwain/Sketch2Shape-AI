@@ -74,26 +74,29 @@ class MultiViewInspector:
         views_specs = self._get_view_camera_specs(center, radius)
         rendered_views = {}
 
-        for view_name, (eye, up) in views_specs.items():
-            renderer.setup_camera(
-                55.0,
-                center.astype(np.float32),
-                eye.astype(np.float32),
-                up.astype(np.float32),
-            )
-            o3d_img = renderer.render_to_image()
-            img_np = np.asarray(o3d_img)
+        try:
+            for view_name, (eye, up) in views_specs.items():
+                renderer.setup_camera(
+                    55.0,
+                    center.astype(np.float32),
+                    eye.astype(np.float32),
+                    up.astype(np.float32),
+                )
+                o3d_img = renderer.render_to_image()
+                img_np = np.asarray(o3d_img)
 
-            # Save PNG
-            save_path = self.output_dir / f"{asset_id}_{view_name}.png"
-            Image.fromarray(img_np).save(str(save_path))
+                # Save PNG
+                save_path = self.output_dir / f"{asset_id}_{view_name}.png"
+                Image.fromarray(img_np).save(str(save_path))
 
-            rendered_views[view_name] = (
-                str(save_path),
-                img_np,
-                eye.tolist(),
-                center.tolist(),
-            )
+                rendered_views[view_name] = (
+                    str(save_path),
+                    img_np,
+                    eye.tolist(),
+                    center.tolist(),
+                )
+        finally:
+            del renderer
 
         return rendered_views
 
@@ -133,7 +136,11 @@ class MultiViewInspector:
         """
         Executes full multi-view consistency audit.
         """
-        rendered_views = self._render_open3d(mesh_path, asset_id)
+        try:
+            rendered_views = self._render_open3d(mesh_path, asset_id)
+        except Exception as e:
+            print(f"[MultiViewInspector] Warning: Open3D rendering failed: {e}. Returning baseline metrics.")
+            rendered_views = {}
 
         view_metrics: Dict[str, ViewSilhouetteMetric] = {}
         occupancies = []

@@ -50,10 +50,13 @@ def _format_job_response(job: PipelineJob) -> Dict[str, Any]:
         if isinstance(path_str, str):
             p = Path(path_str)
             web_artifacts[key] = path_str
-            # Check if relative or absolute under backend/data/jobs
+            # Check if relative or absolute under data/jobs
             norm_str = str(p).replace("\\", "/")
-            if "backend/data/jobs/" in norm_str:
-                rel = norm_str.split("backend/data/jobs/")[1]
+            if "data/jobs/" in norm_str:
+                rel = norm_str.split("data/jobs/")[1]
+                web_artifacts[f"{key}_url"] = f"/static/jobs/{rel}"
+            elif "/jobs/" in norm_str:
+                rel = norm_str.split("/jobs/")[1]
                 web_artifacts[f"{key}_url"] = f"/static/jobs/{rel}"
             elif "exports/" in norm_str:
                 rel = norm_str.split("exports/")[1]

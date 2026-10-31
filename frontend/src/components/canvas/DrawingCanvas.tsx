@@ -55,6 +55,10 @@ export const DrawingCanvas: React.FC = () => {
 
     ctx.beginPath();
     ctx.moveTo(x, y);
+    ctx.lineWidth = tool === 'eraser' ? brushSize * 3 : brushSize;
+    ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : strokeColor;
+    ctx.lineTo(x, y);
+    ctx.stroke();
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {

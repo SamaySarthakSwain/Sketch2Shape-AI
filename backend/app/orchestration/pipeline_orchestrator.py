@@ -9,7 +9,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, Union
 import trimesh
 
 from .pipeline_state import PipelineStage, StageExecutionRecord, PipelineJob
@@ -20,8 +20,12 @@ from .error_handler import PipelineException
 
 
 class PipelineOrchestrator:
-    def __init__(self, base_output_dir: str = "backend/data/jobs"):
-        self.base_output_dir = Path(base_output_dir)
+    def __init__(self, base_output_dir: Optional[Union[str, Path]] = None):
+        if base_output_dir is None:
+            resolved_jobs = Path(__file__).resolve().parents[2] / "data" / "jobs"
+            self.base_output_dir = resolved_jobs
+        else:
+            self.base_output_dir = Path(base_output_dir)
         self.base_output_dir.mkdir(parents=True, exist_ok=True)
         self.stage_executor = StageExecutor()
 
