@@ -88,13 +88,46 @@ class SketchPreprocessingPipeline:
         # 5. Edge Detection
         edge_map, edge_metrics = self.edge_detector.detect_and_measure(denoised_gray, preferred_method="canny")
 
-        # 6. Adaptive Thresholding
-        raw_binary = self.thresholder.binarize(denoised_gray, method="adaptive_gaussian", apply_morphology=True)
+        # Check if input is a high-quality color image or photographic asset
+        is_high_quality_color = False
+        if bgr_original.ndim == 3 and bgr_original.shape[2] == 3:
+            hsv = cv2.cvtColor(bgr_original, cv2.COLOR_BGR2HSV)
+            sat = hsv[:, :, 1]
+            mean_sat = float(np.mean(sat))
+            b_ch, g_ch, r_ch = cv2.split(bgr_original)
+            color_diff = float(np.mean(np.abs(r_ch.astype(float) - g_ch.astype(float)) + np.abs(g_ch.astype(float) - b_ch.astype(float))))
+            if mean_sat > 12.0 or color_diff > 6.0:
+                is_high_quality_color = True
 
-        # 7. Foreground Extraction & Noise Cleanup
-        clean_mask, rgba_cutout = self.foreground_extractor.extract_foreground(
-            bgr_composited, raw_binary, alpha_channel
-        )
+        if alpha_channel is not None and np.count_nonzero(alpha_channel > 10) > 100:
+            # Alpha cutout provided in high-quality PNG
+            clean_mask = alpha_channel
+        elif is_high_quality_color:
+            # Segment solid object from background preserving solid interior and colors
+            corner_colors = [
+                bgr_composited[0, 0],
+                bgr_composited[0, -1],
+                bgr_composited[-1, 0],
+                bgr_composited[-1, -1]
+            ]
+            bg_color = np.median(corner_colors, axis=0)
+            diff = np.linalg.norm(bgr_composited.astype(float) - bg_color, axis=2)
+            raw_mask = (diff > 18.0).astype(np.uint8) * 255
+            contours, _ = cv2.findContours(raw_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            clean_mask = np.zeros_like(raw_mask)
+            for cnt in contours:
+                if cv2.contourArea(cnt) > 200:
+                    cv2.drawContours(clean_mask, [cnt], -1, 255, thickness=cv2.FILLED)
+            if np.count_nonzero(clean_mask) < 100:
+                clean_mask = np.full_like(raw_mask, 255)
+        else:
+            # 6. Adaptive Thresholding for black-and-white line sketches
+            raw_binary = self.thresholder.binarize(denoised_gray, method="adaptive_gaussian", apply_morphology=True)
+
+            # 7. Foreground Extraction & Noise Cleanup
+            clean_mask, rgba_cutout = self.foreground_extractor.extract_foreground(
+                bgr_composited, raw_binary, alpha_channel
+            )
 
         # 8. Contour Intelligence
         contour_overlay, contour_metrics, valid_contours = self.contour_analyzer.analyze_contours(clean_mask)
