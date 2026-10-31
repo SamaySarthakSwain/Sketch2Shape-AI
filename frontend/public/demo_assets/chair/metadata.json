@@ -1,0 +1,16 @@
+{
+  "id": "chair",
+  "title": "Executive Chair",
+  "category": "chair",
+  "material": "natural_wood",
+  "style": "realistic",
+  "vertices": 136,
+  "faces": 256,
+  "printability_score": 85.0,
+  "is_watertight": true,
+  "glb_url": "/demo_assets/chair/model.glb",
+  "sketch_url": "/demo_assets/chair/sketch.png",
+  "bundle_url": "/demo_assets/chair/bundle.zip",
+  "is_demo_asset": true,
+  "note": "Pre-generated verified presentation asset showcasing photorealistic PBR baking and slicer manifold topology."
+}

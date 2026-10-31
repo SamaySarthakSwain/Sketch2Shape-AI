@@ -1,0 +1,16 @@
+{
+  "id": "apple",
+  "title": "Honeycrisp Apple",
+  "category": "apple",
+  "material": "organic_apple_red",
+  "style": "realistic",
+  "vertices": 668,
+  "faces": 1328,
+  "printability_score": 95.0,
+  "is_watertight": true,
+  "glb_url": "/demo_assets/apple/model.glb",
+  "sketch_url": "/demo_assets/apple/sketch.png",
+  "bundle_url": "/demo_assets/apple/bundle.zip",
+  "is_demo_asset": true,
+  "note": "Pre-generated verified presentation asset showcasing photorealistic PBR baking and slicer manifold topology."
+}

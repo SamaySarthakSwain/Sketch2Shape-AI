@@ -1,0 +1,73 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.venv/
+.venv_instantmesh/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.env
+.env.local
+.env.*.local
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node.js & Web
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+dist-ssr/
+*.local
+.vite/
+
+# Large Model Checkpoints & Weights
+*.ckpt
+*.safetensors
+*.pt
+*.pth
+*.bin
+*.onnx
+models/*
+!models/.gitkeep
+model_repositories/*
+!model_repositories/.gitkeep
+
+# Datasets & Outputs
+datasets/*
+!datasets/.gitkeep
+outputs/*
+!outputs/.gitkeep
+experiments/*
+!experiments/.gitkeep
+backend/data/jobs/*
+!backend/data/jobs/.gitkeep
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# OS / Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Zip archives
+*.zip
+
+
+# Storage exports
+backend/storage/exports/*
+!backend/storage/exports/.gitkeep
+

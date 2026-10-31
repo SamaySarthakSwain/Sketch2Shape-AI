@@ -1,0 +1,16 @@
+{
+  "id": "car",
+  "title": "Crimson Car",
+  "category": "car",
+  "material": "automotive_red",
+  "style": "product_render",
+  "vertices": 136,
+  "faces": 256,
+  "printability_score": 85.0,
+  "is_watertight": true,
+  "glb_url": "/demo_assets/car/model.glb",
+  "sketch_url": "/demo_assets/car/sketch.png",
+  "bundle_url": "/demo_assets/car/bundle.zip",
+  "is_demo_asset": true,
+  "note": "Pre-generated verified presentation asset showcasing photorealistic PBR baking and slicer manifold topology."
+}
