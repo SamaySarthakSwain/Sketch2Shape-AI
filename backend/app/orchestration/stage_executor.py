@@ -193,9 +193,9 @@ class StageExecutor:
             else:
                 print(f"[StageExecutor] Cloud provider '{pref}' not configured. Falling back to local pipeline.")
 
-        # 2. User explicitly selected local engine
-        if pref in ["instantmesh", "procedural"]:
-            return user_preference, f"User explicitly selected '{user_preference}'"
+        # 2. User explicitly selected engine
+        if pref in ["trellis", "instantmesh", "procedural"]:
+            return pref, f"Selected 3D reconstruction engine '{pref}'"
 
         # 3. Auto mode with cloud provider configured:
         # If high quality preset is requested and a cloud provider is active, use it!
@@ -204,6 +204,11 @@ class StageExecutor:
             for cand in ["meshy", "tripo", "rodin"]:
                 if cand in avail_cloud:
                     return cand, f"Auto-selected cloud provider '{cand}' for high-fidelity PBR generation"
+
+        # 4. Microsoft TRELLIS selection for high quality
+        trellis_adapter = model_registry.get_model("trellis")
+        if trellis_adapter and trellis_adapter.is_available() and quality_preset == "high":
+            return "trellis", f"Microsoft TRELLIS (Structured 3D Latents) selected for high-fidelity 3D reconstruction"
 
         # 4. Local execution routing
         has_procedural_template = CategoryGeometryTemplates.is_category_supported(category)

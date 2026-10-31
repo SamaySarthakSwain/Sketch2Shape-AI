@@ -11,6 +11,7 @@ from app.reconstruction.adapters.instantmesh_adapter import InstantMeshAdapter
 from app.reconstruction.adapters.procedural_adapter import ProceduralAdapter
 from app.reconstruction.adapters.hunyuan_adapter import HunyuanAdapter
 from app.reconstruction.adapters.triposr_adapter import TripoSRAdapter
+from app.reconstruction.adapters.trellis_adapter import TrellisAdapter
 
 
 class ModelRegistry:
@@ -28,6 +29,7 @@ class ModelRegistry:
 
     def _init_default_models(self):
         """Initializes default known model adapters."""
+        self.register(TrellisAdapter())
         self.register(InstantMeshAdapter())
         self.register(ProceduralAdapter())
         self.register(HunyuanAdapter())
